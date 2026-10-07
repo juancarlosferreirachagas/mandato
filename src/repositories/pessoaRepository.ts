@@ -73,7 +73,7 @@ export const pessoaRepository = {
   async getPerfil(id: string): Promise<PerfilPolitico | null> {
     const client = db();
     const [pessoa, mandatos, candidaturas, filiacoes] = await Promise.all([
-      client.from('pessoas').select('id, nome_civil, nome_politico, data_nascimento, foto_url').eq('id', id).maybeSingle(),
+      client.from('pessoas').select('id, nome_civil, nome_politico, data_nascimento, foto_url, identificadores_externos').eq('id', id).maybeSingle(),
       client.from('mandatos').select(MANDATO_SELECT).eq('pessoa_id', id).order('inicio', { ascending: false }),
       client.from('candidaturas').select(CANDIDATURA_SELECT).eq('pessoa_id', id),
       client.from('filiacoes').select('id, inicio, fim, partido:partidos(sigla,nome)').eq('pessoa_id', id).order('inicio'),

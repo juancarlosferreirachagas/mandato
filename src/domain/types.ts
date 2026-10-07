@@ -29,6 +29,7 @@ export interface Pessoa {
   nome_politico: string | null;
   data_nascimento: string | null;
   foto_url: string | null;
+  identificadores_externos?: Record<string, any>;
 }
 
 export interface Cargo {

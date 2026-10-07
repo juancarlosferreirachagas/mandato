@@ -41,23 +41,6 @@ export interface CamaraDeputadoDetalhe {
   escolaridade: string;
 }
 
-export interface CamaraDespesa {
-  ano: number;
-  mes: number;
-  tipoDespesa: string;
-  codDocumento: number;
-  tipoDocumento: string;
-  dataDocumento: string;
-  numDocumento: string;
-  valorDocumento: number;
-  urlDocumento: string | null;
-  nomeFornecedor: string;
-  cnpjCpfFornecedor: string;
-  valorLiquido: number;
-  valorGlosa: number;
-  numRessarcimento: string;
-}
-
 export interface CamaraProposicao {
   id: number;
   uri: string;
@@ -66,16 +49,7 @@ export interface CamaraProposicao {
   numero: number;
   ano: number;
   ementa: string;
-}
-
-export interface CamaraVotacao {
-  id: string;
-  uri: string;
-  dataHoraRegistro: string;
-  siglaOrgao: string;
-  uriOrgao: string;
-  proposicaoObjeto: string;
-  voto: string; // "Sim", "Não", "Abstenção", "Artigo 17", "Obstrução"
+  dataApresentacao?: string;
 }
 
 export interface CamaraOrgao {
@@ -83,9 +57,23 @@ export interface CamaraOrgao {
   uriOrgao: string;
   siglaOrgao: string;
   nomeOrgao: string;
-  titulo: string; // Ex: "Membro", "Presidente", "Suplente"
+  nomePublicacao?: string | null;
+  titulo: string; // Ex: "Membro", "Presidente", "Suplente", "Titular"
   dataInicio: string;
   dataFim: string | null;
+}
+
+export interface CamaraFrente {
+  id: number;
+  uri: string;
+  titulo: string;
+  idLegislatura: number;
+}
+
+export interface CamaraProfissao {
+  dataHora: string;
+  codTipoProfissao: number;
+  titulo: string;
 }
 
 export interface CamaraDiscurso {
@@ -117,32 +105,13 @@ export const camaraService = {
   },
 
   /**
-   * Obtém as despesas e cota parlamentar mais recentes do deputado
-   * Swagger: GET /deputados/{id}/despesas
-   */
-  async getDespesas(id: number, ano?: number): Promise<CamaraDespesa[]> {
-    try {
-      const anoConsulta = ano || new Date().getFullYear();
-      const res = await fetch(
-        `${BASE_URL}/deputados/${id}/despesas?ano=${anoConsulta}&ordem=DESC&ordenarPor=dataDocumento&itens=25`,
-        { headers: { Accept: 'application/json' } },
-      );
-      if (!res.ok) return [];
-      const json = await res.json();
-      return (json.dados ?? []) as CamaraDespesa[];
-    } catch {
-      return [];
-    }
-  },
-
-  /**
    * Obtém os projetos e proposições de autoria do deputado
    * Swagger: GET /proposicoes?idDeputadoAutor={id}
    */
   async getProposicoes(id: number): Promise<CamaraProposicao[]> {
     try {
       const res = await fetch(
-        `${BASE_URL}/proposicoes?idDeputadoAutor=${id}&ordem=DESC&ordenarPor=ano&itens=25`,
+        `${BASE_URL}/proposicoes?idDeputadoAutor=${id}&ordem=DESC&ordenarPor=ano&itens=50`,
         { headers: { Accept: 'application/json' } },
       );
       if (!res.ok) return [];
@@ -159,12 +128,46 @@ export const camaraService = {
    */
   async getOrgaos(id: number): Promise<CamaraOrgao[]> {
     try {
-      const res = await fetch(`${BASE_URL}/deputados/${id}/orgaos?ordem=DESC&ordenarPor=dataInicio&itens=25`, {
+      const res = await fetch(`${BASE_URL}/deputados/${id}/orgaos?ordem=DESC&ordenarPor=dataInicio&itens=50`, {
         headers: { Accept: 'application/json' },
       });
       if (!res.ok) return [];
       const json = await res.json();
       return (json.dados ?? []) as CamaraOrgao[];
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Obtém as frentes parlamentares que o deputado integra
+   * Swagger: GET /deputados/{id}/frentes
+   */
+  async getFrentes(id: number): Promise<CamaraFrente[]> {
+    try {
+      const res = await fetch(`${BASE_URL}/deputados/${id}/frentes`, {
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) return [];
+      const json = await res.json();
+      return (json.dados ?? []) as CamaraFrente[];
+    } catch {
+      return [];
+    }
+  },
+
+  /**
+   * Obtém as profissões registradas do deputado
+   * Swagger: GET /deputados/{id}/profissoes
+   */
+  async getProfissoes(id: number): Promise<CamaraProfissao[]> {
+    try {
+      const res = await fetch(`${BASE_URL}/deputados/${id}/profissoes`, {
+        headers: { Accept: 'application/json' },
+      });
+      if (!res.ok) return [];
+      const json = await res.json();
+      return (json.dados ?? []) as CamaraProfissao[];
     } catch {
       return [];
     }
@@ -177,7 +180,7 @@ export const camaraService = {
   async getDiscursos(id: number): Promise<CamaraDiscurso[]> {
     try {
       const res = await fetch(
-        `${BASE_URL}/deputados/${id}/discursos?ordem=DESC&ordenarPor=dataHoraInicio&itens=15`,
+        `${BASE_URL}/deputados/${id}/discursos?ordem=DESC&ordenarPor=dataHoraInicio&itens=20`,
         { headers: { Accept: 'application/json' } },
       );
       if (!res.ok) return [];

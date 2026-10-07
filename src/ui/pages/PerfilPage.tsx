@@ -3,7 +3,14 @@ import { useParams, Link } from 'react-router-dom';
 import { perfilService, type PerfilCompleto } from '@/services/perfilService';
 import { abasRepository, type LinhaAba } from '@/repositories/abasRepository';
 import { fonteRepository } from '@/repositories/adminRepositories';
-import { camaraService, type CamaraProposicao, type CamaraDespesa, type CamaraOrgao, type CamaraDiscurso, type CamaraDeputadoDetalhe } from '@/services/camaraService';
+import {
+  camaraService,
+  type CamaraProposicao,
+  type CamaraOrgao,
+  type CamaraFrente,
+  type CamaraDiscurso,
+  type CamaraDeputadoDetalhe,
+} from '@/services/camaraService';
 import { alespService } from '@/services/alespService';
 import { formatarData, formatarPeriodo, percentualPresenca, rotuloSituacao } from '@/domain/rules';
 import { useAsync } from '../hooks/useAsync';
@@ -11,14 +18,14 @@ import { EmptyState, ErrorBox, FonteRef, Loading } from '../components/common';
 import { PartyBadge } from '../components/PartyBadge';
 
 type TabId =
-  | 'geral' | 'propostas' | 'gastos' | 'comissoes' | 'discursos' | 'presenca'
+  | 'geral' | 'propostas' | 'comissoes' | 'frentes' | 'discursos' | 'presenca'
   | 'historico' | 'mandato' | 'fontes';
 
 const TABS: { id: TabId; label: string; icone: string }[] = [
   { id: 'geral', label: 'Visão Geral', icone: '📊' },
   { id: 'propostas', label: 'Propostas & Leis', icone: '📜' },
-  { id: 'gastos', label: 'Cota & Gastos', icone: '💰' },
   { id: 'comissoes', label: 'Comissões', icone: '👥' },
+  { id: 'frentes', label: 'Frentes Parlamentares', icone: '🤝' },
   { id: 'discursos', label: 'Discursos', icone: '🎙️' },
   { id: 'presenca', label: 'Presença', icone: '📅' },
   { id: 'historico', label: 'Histórico & Eleições', icone: '⏱️' },
@@ -27,10 +34,10 @@ const TABS: { id: TabId; label: string; icone: string }[] = [
 ];
 
 const AJUDA: Record<TabId, string> = {
-  geral: 'Resumo em números das atividades registradas durante o mandato atual.',
-  propostas: 'Projetos de lei e iniciativas legislativas da base oficial da Câmara e ALESP.',
-  gastos: 'Cota parlamentar oficial (combustível, passagens, divulgação, consultoria) com notas fiscais.',
-  comissoes: 'Comissões temáticas permanentes e especiais onde o parlamentar atua.',
+  geral: 'Resumo factual das informações e atuação oficial registradas no mandato.',
+  propostas: 'Projetos de lei e iniciativas legislativas da base oficial da Câmara dos Deputados e ALESP.',
+  comissoes: 'Comissões temáticas permanentes e especiais onde o parlamentar atua (Titular, Suplente, etc.).',
+  frentes: 'Frentes parlamentares e grupos de trabalho interpartidários que o parlamentar integra.',
   discursos: 'Pronunciamentos e discursos oficiais proferidos no plenário.',
   presenca: 'Frequência do parlamentar nas sessões deliberativas oficiais.',
   historico: 'Histórico de eleições disputadas e evolução partidária.',
@@ -54,16 +61,27 @@ function PropostasAba({ pessoaId, camaraId }: { pessoaId: string; camaraId?: num
         <div className="camara-api-banner">
           <div>
             <strong>📜 Dados Abertos Oficiais da Câmara dos Deputados</strong>
-            <div className="muted small">Últimas proposições e projetos apresentados pelo deputado.</div>
+            <div className="muted small">
+              {proposicoesCamara.length} proposições e projetos apresentados pelo deputado.
+            </div>
           </div>
-          <span className="fonte-badge">API Swagger v2 · Live</span>
+          <span className="fonte-badge">API Swagger v2 · Ao Vivo</span>
         </div>
         <ul className="data-rows">
           {proposicoesCamara.map((p) => (
             <li key={p.id} className="data-row">
               <div className="data-row__main">
-                <div className="data-row__title">{p.siglaTipo} {p.numero}/{p.ano}</div>
-                <div className="data-row__subtitle">{p.ementa}</div>
+                <div className="data-row__title">
+                  {p.siglaTipo} {p.numero}/{p.ano}
+                </div>
+                <div className="data-row__subtitle" style={{ marginTop: '4px', lineHeight: 1.5 }}>
+                  {p.ementa}
+                </div>
+                {p.dataApresentacao && (
+                  <div className="muted small" style={{ marginTop: '6px' }}>
+                    Apresentado em: {formatarData(p.dataApresentacao)}
+                  </div>
+                )}
               </div>
               <div className="data-row__side">
                 <span className="chip">{p.siglaTipo}</span>
@@ -112,80 +130,6 @@ function PropostasAba({ pessoaId, camaraId }: { pessoaId: string; camaraId?: num
   );
 }
 
-/** Aba de Gastos / Cota Parlamentar com API Live da Câmara */
-function GastosAba({ camaraId }: { camaraId?: number }) {
-  const res = useAsync(() => (camaraId ? camaraService.getDespesas(camaraId) : Promise.resolve([])), [camaraId]);
-
-  if (!camaraId) {
-    return (
-      <div className="empty-box">
-        <div className="empty-box__title">Cota Parlamentar</div>
-        <p className="empty-box__text">
-          Dados detalhados de despesas disponíveis para parlamentares federais através da API de Dados Abertos da Câmara.
-        </p>
-      </div>
-    );
-  }
-
-  if (res.loading) return <Loading />;
-  if (res.error) return <ErrorBox error={res.error} />;
-
-  const despesas: CamaraDespesa[] = res.data ?? [];
-  if (despesas.length === 0) {
-    return (
-      <div className="empty-box">
-        <div className="empty-box__title">Nenhum gasto recente registrado</div>
-        <p className="empty-box__text">Sem despesas registradas na cota do ano atual.</p>
-      </div>
-    );
-  }
-
-  const total = despesas.reduce((acc, d) => acc + (d.valorLiquido || 0), 0);
-
-  return (
-    <div>
-      <div className="camara-api-banner">
-        <div>
-          <strong>💰 Cota para o Exercício da Atividade Parlamentar (CEAP)</strong>
-          <div className="muted small">
-            Total nas últimas {despesas.length} despesas: <strong>R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
-          </div>
-        </div>
-        <span className="fonte-badge">Fonte: Câmara dos Deputados</span>
-      </div>
-
-      <ul className="data-rows">
-        {despesas.map((d, i) => (
-          <li key={d.codDocumento || i} className="data-row">
-            <div className="data-row__main">
-              <div className="data-row__title">{d.tipoDespesa}</div>
-              <div className="data-row__subtitle">
-                Fornecedor: <strong>{d.nomeFornecedor}</strong> · {formatarData(d.dataDocumento)}
-              </div>
-            </div>
-            <div className="data-row__side">
-              <span className="chip" style={{ fontWeight: 800, color: 'var(--text-main)' }}>
-                R$ {d.valorLiquido?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-              </span>
-              {d.urlDocumento && (
-                <a
-                  href={d.urlDocumento}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="btn btn--ghost"
-                  style={{ fontSize: '0.78rem', padding: '4px 10px' }}
-                >
-                  Nota Fiscal ↗
-                </a>
-              )}
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
 /** Aba de Comissões e Órgãos */
 function ComissoesAba({ pessoaId, camaraId }: { pessoaId: string; camaraId?: number }) {
   const resCamara = useAsync(() => (camaraId ? camaraService.getOrgaos(camaraId) : Promise.resolve([])), [camaraId]);
@@ -201,8 +145,8 @@ function ComissoesAba({ pessoaId, camaraId }: { pessoaId: string; camaraId?: num
       <div>
         <div className="camara-api-banner">
           <div>
-            <strong>👥 Comissões & Frentes Parlamentares Oficiais</strong>
-            <div className="muted small">Órgãos deliberativos e legislativos que o deputado integra.</div>
+            <strong>👥 Comissões da Câmara dos Deputados</strong>
+            <div className="muted small">Órgãos deliberativos e legislativos onde o deputado atua.</div>
           </div>
           <span className="fonte-badge">Câmara dos Deputados</span>
         </div>
@@ -210,13 +154,17 @@ function ComissoesAba({ pessoaId, camaraId }: { pessoaId: string; camaraId?: num
           {orgaosCamara.map((o) => (
             <li key={o.idOrgao} className="data-row">
               <div className="data-row__main">
-                <div className="data-row__title">{o.nomeOrgao} ({o.siglaOrgao})</div>
-                <div className="data-row__subtitle">
-                  Condição: <strong>{o.titulo}</strong> · Desde {formatarData(o.dataInicio)}
+                <div className="data-row__title">
+                  {o.nomePublicacao || o.nomeOrgao} ({o.siglaOrgao})
+                </div>
+                <div className="data-row__subtitle" style={{ marginTop: '4px' }}>
+                  Condição: <strong>{o.titulo}</strong> · Atuação desde {formatarData(o.dataInicio)}
                 </div>
               </div>
               <div className="data-row__side">
-                <span className="chip">{o.titulo}</span>
+                <span className="chip" style={{ fontWeight: 700 }}>
+                  {o.titulo}
+                </span>
               </div>
             </li>
           ))}
@@ -248,6 +196,58 @@ function ComissoesAba({ pessoaId, camaraId }: { pessoaId: string; camaraId?: num
     <div className="empty-box">
       <div className="empty-box__title">Nenhuma comissão registrada</div>
       <p className="empty-box__text">Sem participações ativas registradas no momento.</p>
+    </div>
+  );
+}
+
+/** Aba de Frentes Parlamentares */
+function FrentesAba({ camaraId }: { camaraId?: number }) {
+  const res = useAsync(() => (camaraId ? camaraService.getFrentes(camaraId) : Promise.resolve([])), [camaraId]);
+
+  if (!camaraId) {
+    return (
+      <div className="empty-box">
+        <div className="empty-box__title">Frentes Parlamentares</div>
+        <p className="empty-box__text">Frentes parlamentares disponíveis via API da Câmara dos Deputados.</p>
+      </div>
+    );
+  }
+
+  if (res.loading) return <Loading />;
+  if (res.error) return <ErrorBox error={res.error} />;
+
+  const frentes: CamaraFrente[] = res.data ?? [];
+  if (frentes.length === 0) {
+    return (
+      <div className="empty-box">
+        <div className="empty-box__title">Nenhuma frente registrada</div>
+        <p className="empty-box__text">Sem registros de frentes parlamentares ativas.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="camara-api-banner">
+        <div>
+          <strong>🤝 Frentes Parlamentares Integradas ({frentes.length})</strong>
+          <div className="muted small">Grupos de atuação suprapartidária na Câmara dos Deputados.</div>
+        </div>
+        <span className="fonte-badge">57ª Legislatura</span>
+      </div>
+
+      <ul className="data-rows">
+        {frentes.map((f) => (
+          <li key={f.id} className="data-row">
+            <div className="data-row__main">
+              <div className="data-row__title">{f.titulo}</div>
+            </div>
+            <div className="data-row__side">
+              <span className="chip">Frente Oficial</span>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
@@ -285,7 +285,7 @@ function DiscursosAba({ camaraId }: { camaraId?: number }) {
           <div className="data-row__main">
             <div className="data-row__title">{d.tipoDiscurso || 'Pronunciamento em Plenário'}</div>
             <div className="data-row__subtitle" style={{ marginTop: '4px', lineHeight: 1.5 }}>
-              {d.sumario || d.transcricao?.slice(0, 240) + '...'}
+              {d.sumario || (d.transcricao ? d.transcricao.slice(0, 240) + '...' : 'Pronunciamento registrado na Câmara.')}
             </div>
           </div>
           <div className="data-row__side">
@@ -472,13 +472,18 @@ export function PerfilPage() {
   const res = useAsync(() => perfilService.carregar(id), [id]);
 
   const p = res.data;
-  const identificadores = (p?.pessoa as any)?.identificadores_externos || {};
+  const identificadores = p?.pessoa?.identificadores_externos || {};
   const camaraId: number | undefined = identificadores.camara_id;
   const alespId: string | undefined = identificadores.alesp_id;
 
-  // Carregar detalhes ao vivo do gabinete da Câmara
+  // Carregar detalhes ao vivo do gabinete e profissão da Câmara
   const resCamaraDetalhe = useAsync<CamaraDeputadoDetalhe | null>(
     () => (camaraId ? camaraService.getDeputado(camaraId) : Promise.resolve(null)),
+    [camaraId],
+  );
+
+  const resProfissoes = useAsync(
+    () => (camaraId ? camaraService.getProfissoes(camaraId) : Promise.resolve([])),
     [camaraId],
   );
 
@@ -491,7 +496,9 @@ export function PerfilPage() {
     .filter((c) => c.resultado?.startsWith('eleito'))
     .sort((a, b) => (b.eleicao?.ano ?? 0) - (a.eleicao?.ano ?? 0))[0];
   const nome = p.pessoa.nome_politico ?? p.pessoa.nome_civil;
-  const gabinete = resCamaraDetalhe.data?.ultimoStatus?.gabinete;
+  const detalheCamara = resCamaraDetalhe.data;
+  const gabinete = detalheCamara?.ultimoStatus?.gabinete;
+  const profissao = resProfissoes.data?.[0]?.titulo;
 
   return (
     <>
@@ -529,9 +536,11 @@ export function PerfilPage() {
           </div>
 
           <h1 className="profile-hero__name">{nome}</h1>
-          {p.pessoa.nome_politico && p.pessoa.nome_civil && p.pessoa.nome_civil !== p.pessoa.nome_politico && (
+          {p.pessoa.nome_civil && (
             <div className="profile-hero__civil">
-              Nome civil: <strong>{p.pessoa.nome_civil}</strong>
+              Nome civil registrado: <strong>{p.pessoa.nome_civil}</strong>
+              {profissao && <span> · Profissão: <strong>{profissao}</strong></span>}
+              {detalheCamara?.escolaridade && <span> · Escolaridade: <strong>{detalheCamara.escolaridade}</strong></span>}
             </div>
           )}
 
@@ -560,9 +569,27 @@ export function PerfilPage() {
           {/* Dados Oficiais do Gabinete em Brasília */}
           {gabinete && (
             <div style={{ marginTop: '14px', padding: '10px 14px', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)', fontSize: '0.82rem', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-              <div>🏢 Gabinete: <strong>{gabinete.predio ? `Prédio ${gabinete.predio}, Sala ${gabinete.sala}` : gabinete.nome}</strong></div>
+              <div>🏢 Gabinete: <strong>{gabinete.predio ? `Anexo ${gabinete.predio}, Sala ${gabinete.sala}` : gabinete.nome}</strong></div>
               {gabinete.telefone && <div>📞 Tel: <strong>{gabinete.telefone}</strong></div>}
               {gabinete.email && <div>✉️ Email: <strong>{gabinete.email}</strong></div>}
+            </div>
+          )}
+
+          {/* Redes Sociais Oficiais */}
+          {detalheCamara?.redeSocial && detalheCamara.redeSocial.length > 0 && (
+            <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {detalheCamara.redeSocial.map((url, i) => (
+                <a
+                  key={i}
+                  href={url}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="fonte-badge"
+                  style={{ textDecoration: 'none' }}
+                >
+                  🔗 {url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+                </a>
+              ))}
             </div>
           )}
         </div>
@@ -594,8 +621,8 @@ export function PerfilPage() {
 
         {tab === 'geral' && <Metricas perfil={p} />}
         {tab === 'propostas' && <PropostasAba pessoaId={p.pessoa.id} camaraId={camaraId} />}
-        {tab === 'gastos' && <GastosAba camaraId={camaraId} />}
         {tab === 'comissoes' && <ComissoesAba pessoaId={p.pessoa.id} camaraId={camaraId} />}
+        {tab === 'frentes' && <FrentesAba camaraId={camaraId} />}
         {tab === 'discursos' && <DiscursosAba camaraId={camaraId} />}
         {tab === 'presenca' && <Metricas perfil={p} />}
         {tab === 'historico' && <Timeline perfil={p} />}
