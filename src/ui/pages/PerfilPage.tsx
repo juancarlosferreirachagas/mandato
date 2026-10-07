@@ -3,78 +3,294 @@ import { useParams, Link } from 'react-router-dom';
 import { perfilService, type PerfilCompleto } from '@/services/perfilService';
 import { abasRepository, type LinhaAba } from '@/repositories/abasRepository';
 import { fonteRepository } from '@/repositories/adminRepositories';
+import { camaraService, type CamaraProposicao, type CamaraDespesa, type CamaraOrgao, type CamaraDiscurso, type CamaraDeputadoDetalhe } from '@/services/camaraService';
+import { alespService } from '@/services/alespService';
 import { formatarData, formatarPeriodo, percentualPresenca, rotuloSituacao } from '@/domain/rules';
 import { useAsync } from '../hooks/useAsync';
 import { EmptyState, ErrorBox, FonteRef, Loading } from '../components/common';
 import { PartyBadge } from '../components/PartyBadge';
 
 type TabId =
-  | 'geral' | 'historico' | 'mandato' | 'propostas' | 'votacoes' | 'presenca'
-  | 'emendas' | 'comissoes' | 'promessas' | 'processos' | 'fontes';
+  | 'geral' | 'propostas' | 'gastos' | 'comissoes' | 'discursos' | 'presenca'
+  | 'historico' | 'mandato' | 'fontes';
 
 const TABS: { id: TabId; label: string; icone: string }[] = [
   { id: 'geral', label: 'Visão Geral', icone: '📊' },
-  { id: 'propostas', label: 'Propostas de Lei', icone: '📜' },
-  { id: 'votacoes', label: 'Como Votou', icone: '🗳️' },
-  { id: 'presenca', label: 'Presença em Sessões', icone: '📅' },
-  { id: 'emendas', label: 'Emendas do Orçamento', icone: '💰' },
+  { id: 'propostas', label: 'Propostas & Leis', icone: '📜' },
+  { id: 'gastos', label: 'Cota & Gastos', icone: '💰' },
   { id: 'comissoes', label: 'Comissões', icone: '👥' },
-  { id: 'historico', label: 'Trajetória & Eleições', icone: '⏱️' },
-  { id: 'mandato', label: 'Cargos Anteriores', icone: '🏛️' },
+  { id: 'discursos', label: 'Discursos', icone: '🎙️' },
+  { id: 'presenca', label: 'Presença', icone: '📅' },
+  { id: 'historico', label: 'Histórico & Eleições', icone: '⏱️' },
+  { id: 'mandato', label: 'Mandatos', icone: '🏛️' },
   { id: 'fontes', label: 'Fontes Oficiais', icone: '🔗' },
 ];
 
 const AJUDA: Record<TabId, string> = {
   geral: 'Resumo em números das atividades registradas durante o mandato atual.',
-  propostas: 'Projetos de lei e iniciativas legislativas escritas ou assinadas pelo parlamentar.',
-  votacoes: 'Posicionamento oficial registrado nas votações de plenário: Sim, Não, Abstenção ou Ausência.',
-  presenca: 'Frequência do parlamentar nas sessões deliberativas oficiais e ausências justificadas.',
-  emendas: 'Recursos públicos do orçamento que o parlamentar indicou para obras, saúde e cidades.',
-  comissoes: 'Grupos temáticos (ex: Educação, Saúde, Constituição e Justiça) em que o parlamentar atua.',
+  propostas: 'Projetos de lei e iniciativas legislativas da base oficial da Câmara e ALESP.',
+  gastos: 'Cota parlamentar oficial (combustível, passagens, divulgação, consultoria) com notas fiscais.',
+  comissoes: 'Comissões temáticas permanentes e especiais onde o parlamentar atua.',
+  discursos: 'Pronunciamentos e discursos oficiais proferidos no plenário.',
+  presenca: 'Frequência do parlamentar nas sessões deliberativas oficiais.',
   historico: 'Histórico de eleições disputadas e evolução partidária.',
   mandato: 'Mandatos executivos e legislativos já exercidos ao longo da carreira.',
-  promessas: 'Propostas e compromissos registrados em campanhas eleitorais.',
-  processos: 'Processos judiciais públicos. Nota: a existência de processo não implica condenação.',
-  fontes: 'Links e órgãos oficiais responsáveis pelos dados exibidos neste perfil.',
+  fontes: 'Links e APIs oficiais de onde foram extraídos todos os dados deste perfil.',
 };
 
-const LISTAS: Partial<Record<TabId, (id: string) => Promise<LinhaAba[]>>> = {
-  propostas: abasRepository.propostas,
-  votacoes: abasRepository.votacoes,
-  presenca: abasRepository.presencas,
-  emendas: abasRepository.emendas,
-  comissoes: abasRepository.comissoes,
-  promessas: abasRepository.promessas,
-  processos: abasRepository.processos,
-};
+/** Aba de Propostas com fallback de API Live da Câmara */
+function PropostasAba({ pessoaId, camaraId }: { pessoaId: string; camaraId?: number }) {
+  const resCamara = useAsync(() => (camaraId ? camaraService.getProposicoes(camaraId) : Promise.resolve([])), [camaraId]);
+  const resBanco = useAsync(() => abasRepository.propostas(pessoaId), [pessoaId]);
 
-function ListaAba({ pessoaId, tab }: { pessoaId: string; tab: TabId }) {
-  const fn = LISTAS[tab]!;
-  const res = useAsync(() => fn(pessoaId), [pessoaId, tab]);
-  if (res.loading) return <Loading />;
-  if (res.error) return <ErrorBox error={res.error} />;
-  if (!res.data?.length) {
+  if (resCamara.loading || resBanco.loading) return <Loading />;
+
+  const proposicoesCamara: CamaraProposicao[] = resCamara.data ?? [];
+  const proposicoesBanco: LinhaAba[] = resBanco.data ?? [];
+
+  if (proposicoesCamara.length > 0) {
+    return (
+      <div>
+        <div className="camara-api-banner">
+          <div>
+            <strong>📜 Dados Abertos Oficiais da Câmara dos Deputados</strong>
+            <div className="muted small">Últimas proposições e projetos apresentados pelo deputado.</div>
+          </div>
+          <span className="fonte-badge">API Swagger v2 · Live</span>
+        </div>
+        <ul className="data-rows">
+          {proposicoesCamara.map((p) => (
+            <li key={p.id} className="data-row">
+              <div className="data-row__main">
+                <div className="data-row__title">{p.siglaTipo} {p.numero}/{p.ano}</div>
+                <div className="data-row__subtitle">{p.ementa}</div>
+              </div>
+              <div className="data-row__side">
+                <span className="chip">{p.siglaTipo}</span>
+                <a
+                  href={`https://www.camara.leg.br/proposicoesWeb/fichadetramitacao?idProposicao=${p.id}`}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="btn btn--ghost"
+                  style={{ fontSize: '0.78rem', padding: '4px 10px' }}
+                >
+                  Ver Tramitação ↗
+                </a>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  if (proposicoesBanco.length > 0) {
+    return (
+      <ul className="data-rows">
+        {proposicoesBanco.map((r) => (
+          <li key={r.id} className="data-row">
+            <div className="data-row__main">
+              <div className="data-row__title">{r.titulo}</div>
+              {r.subtitulo && <div className="data-row__subtitle">{r.subtitulo}</div>}
+            </div>
+            <div className="data-row__side">
+              {r.badge && <span className="chip">{r.badge}</span>}
+              {r.data && <span className="muted small">{formatarData(r.data)}</span>}
+              <FonteRef id={r.fonteId} />
+            </div>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return (
+    <div className="empty-box">
+      <div className="empty-box__title">Nenhuma proposta registrada</div>
+      <p className="empty-box__text">Ainda não constam projetos importados ou registrados para este mandato.</p>
+    </div>
+  );
+}
+
+/** Aba de Gastos / Cota Parlamentar com API Live da Câmara */
+function GastosAba({ camaraId }: { camaraId?: number }) {
+  const res = useAsync(() => (camaraId ? camaraService.getDespesas(camaraId) : Promise.resolve([])), [camaraId]);
+
+  if (!camaraId) {
     return (
       <div className="empty-box">
-        <div className="empty-box__title">Nenhum registro encontrado</div>
+        <div className="empty-box__title">Cota Parlamentar</div>
         <p className="empty-box__text">
-          Ainda não constam dados adicionais importados para esta seção na base oficial deste mandato.
+          Dados detalhados de despesas disponíveis para parlamentares federais através da API de Dados Abertos da Câmara.
         </p>
       </div>
     );
   }
+
+  if (res.loading) return <Loading />;
+  if (res.error) return <ErrorBox error={res.error} />;
+
+  const despesas: CamaraDespesa[] = res.data ?? [];
+  if (despesas.length === 0) {
+    return (
+      <div className="empty-box">
+        <div className="empty-box__title">Nenhum gasto recente registrado</div>
+        <p className="empty-box__text">Sem despesas registradas na cota do ano atual.</p>
+      </div>
+    );
+  }
+
+  const total = despesas.reduce((acc, d) => acc + (d.valorLiquido || 0), 0);
+
+  return (
+    <div>
+      <div className="camara-api-banner">
+        <div>
+          <strong>💰 Cota para o Exercício da Atividade Parlamentar (CEAP)</strong>
+          <div className="muted small">
+            Total nas últimas {despesas.length} despesas: <strong>R$ {total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</strong>
+          </div>
+        </div>
+        <span className="fonte-badge">Fonte: Câmara dos Deputados</span>
+      </div>
+
+      <ul className="data-rows">
+        {despesas.map((d, i) => (
+          <li key={d.codDocumento || i} className="data-row">
+            <div className="data-row__main">
+              <div className="data-row__title">{d.tipoDespesa}</div>
+              <div className="data-row__subtitle">
+                Fornecedor: <strong>{d.nomeFornecedor}</strong> · {formatarData(d.dataDocumento)}
+              </div>
+            </div>
+            <div className="data-row__side">
+              <span className="chip" style={{ fontWeight: 800, color: 'var(--text-main)' }}>
+                R$ {d.valorLiquido?.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+              </span>
+              {d.urlDocumento && (
+                <a
+                  href={d.urlDocumento}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  className="btn btn--ghost"
+                  style={{ fontSize: '0.78rem', padding: '4px 10px' }}
+                >
+                  Nota Fiscal ↗
+                </a>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Aba de Comissões e Órgãos */
+function ComissoesAba({ pessoaId, camaraId }: { pessoaId: string; camaraId?: number }) {
+  const resCamara = useAsync(() => (camaraId ? camaraService.getOrgaos(camaraId) : Promise.resolve([])), [camaraId]);
+  const resBanco = useAsync(() => abasRepository.comissoes(pessoaId), [pessoaId]);
+
+  if (resCamara.loading || resBanco.loading) return <Loading />;
+
+  const orgaosCamara: CamaraOrgao[] = resCamara.data ?? [];
+  const orgaosBanco: LinhaAba[] = resBanco.data ?? [];
+
+  if (orgaosCamara.length > 0) {
+    return (
+      <div>
+        <div className="camara-api-banner">
+          <div>
+            <strong>👥 Comissões & Frentes Parlamentares Oficiais</strong>
+            <div className="muted small">Órgãos deliberativos e legislativos que o deputado integra.</div>
+          </div>
+          <span className="fonte-badge">Câmara dos Deputados</span>
+        </div>
+        <ul className="data-rows">
+          {orgaosCamara.map((o) => (
+            <li key={o.idOrgao} className="data-row">
+              <div className="data-row__main">
+                <div className="data-row__title">{o.nomeOrgao} ({o.siglaOrgao})</div>
+                <div className="data-row__subtitle">
+                  Condição: <strong>{o.titulo}</strong> · Desde {formatarData(o.dataInicio)}
+                </div>
+              </div>
+              <div className="data-row__side">
+                <span className="chip">{o.titulo}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    );
+  }
+
+  if (orgaosBanco.length > 0) {
+    return (
+      <ul className="data-rows">
+        {orgaosBanco.map((r) => (
+          <li key={r.id} className="data-row">
+            <div className="data-row__main">
+              <div className="data-row__title">{r.titulo}</div>
+              {r.subtitulo && <div className="data-row__subtitle">{r.subtitulo}</div>}
+            </div>
+            <div className="data-row__side">
+              {r.badge && <span className="chip">{r.badge}</span>}
+              <FonteRef id={r.fonteId} />
+            </div>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return (
+    <div className="empty-box">
+      <div className="empty-box__title">Nenhuma comissão registrada</div>
+      <p className="empty-box__text">Sem participações ativas registradas no momento.</p>
+    </div>
+  );
+}
+
+/** Aba de Discursos Oficiais */
+function DiscursosAba({ camaraId }: { camaraId?: number }) {
+  const res = useAsync(() => (camaraId ? camaraService.getDiscursos(camaraId) : Promise.resolve([])), [camaraId]);
+
+  if (!camaraId) {
+    return (
+      <div className="empty-box">
+        <div className="empty-box__title">Discursos e Pronunciamentos</div>
+        <p className="empty-box__text">Discursos em plenário disponíveis via Dados Abertos da Câmara dos Deputados.</p>
+      </div>
+    );
+  }
+
+  if (res.loading) return <Loading />;
+  if (res.error) return <ErrorBox error={res.error} />;
+
+  const discursos: CamaraDiscurso[] = res.data ?? [];
+  if (discursos.length === 0) {
+    return (
+      <div className="empty-box">
+        <div className="empty-box__title">Nenhum discurso recente registrado</div>
+        <p className="empty-box__text">Sem registros de pronunciamentos recentes no plenário.</p>
+      </div>
+    );
+  }
+
   return (
     <ul className="data-rows">
-      {res.data.map((r) => (
-        <li key={r.id} className="data-row">
+      {discursos.map((d, i) => (
+        <li key={i} className="data-row">
           <div className="data-row__main">
-            <div className="data-row__title">{r.titulo}</div>
-            {r.subtitulo && <div className="data-row__subtitle">{r.subtitulo}</div>}
+            <div className="data-row__title">{d.tipoDiscurso || 'Pronunciamento em Plenário'}</div>
+            <div className="data-row__subtitle" style={{ marginTop: '4px', lineHeight: 1.5 }}>
+              {d.sumario || d.transcricao?.slice(0, 240) + '...'}
+            </div>
           </div>
           <div className="data-row__side">
-            {r.badge && <span className="chip">{r.badge}</span>}
-            {r.data && <span className="muted small">{formatarData(r.data)}</span>}
-            <FonteRef id={r.fonteId} />
+            <span className="muted small">{formatarData(d.dataHoraInicio)}</span>
+            <span className="chip">{d.faseEvento || 'Plenário'}</span>
           </div>
         </li>
       ))}
@@ -102,7 +318,7 @@ function Metricas({ perfil }: { perfil: PerfilCompleto }) {
           </div>
 
           {!metricas ? (
-            <p className="muted">Dados de atuação em consolidação pelas fontes abertas.</p>
+            <p className="muted">Dados de atuação em consolidação pelas fontes abertas oficiais.</p>
           ) : (
             <>
               <p className="muted small" style={{ marginBottom: '16px' }}>
@@ -173,34 +389,80 @@ function Timeline({ perfil }: { perfil: PerfilCompleto }) {
   );
 }
 
-function FontesAba({ perfil }: { perfil: PerfilCompleto }) {
+function FontesAba({ perfil, camaraId, alespId }: { perfil: PerfilCompleto; camaraId?: number; alespId?: string }) {
   const ids = useMemo(
     () => [...new Set([...perfil.mandatos.map((m) => m.fonte_id), ...perfil.candidaturas.map((c) => c.fonte_id)].filter((x): x is string => !!x))],
     [perfil],
   );
   const res = useAsync(() => fonteRepository.getMany(ids), [ids.join(',')]);
-  if (res.loading) return <Loading />;
-  if (res.error) return <ErrorBox error={res.error} />;
-  if (!res.data?.length) return <EmptyState title="Nenhuma fonte vinculada" />;
 
   return (
-    <ul className="data-rows">
-      {res.data.map((f) => (
-        <li key={f.id} className="data-row">
-          <div className="data-row__main">
-            <div className="data-row__title">{f.titulo}</div>
-            <div className="muted small">
-              {[f.orgao, f.tipo].filter(Boolean).join(' · ')} · Consulta realizada em {formatarData(f.data_consulta)}
-            </div>
-            {f.url && (
-              <a href={f.url} target="_blank" rel="noreferrer noopener" style={{ fontSize: '0.85rem', color: 'var(--text-main)', fontWeight: 600, textDecoration: 'underline', marginTop: '4px', display: 'inline-block' }}>
-                Acessar base de dados oficial ↗
+    <div>
+      <div className="camara-api-banner">
+        <div>
+          <strong>🔗 Fontes e APIs Oficiais Abertas</strong>
+          <div className="muted small">Princípio Fato → Fonte. Todas as informações podem ser checadas nos órgãos oficiais.</div>
+        </div>
+      </div>
+
+      <ul className="data-rows">
+        {camaraId && (
+          <li className="data-row">
+            <div className="data-row__main">
+              <div className="data-row__title">Câmara dos Deputados — API Swagger de Dados Abertos</div>
+              <div className="muted small">API REST Oficial v2 · Registro ID: {camaraId}</div>
+              <a
+                href={`https://dadosabertos.camara.leg.br/api/v2/deputados/${camaraId}`}
+                target="_blank"
+                rel="noreferrer noopener"
+                style={{ fontSize: '0.85rem', color: 'var(--text-main)', fontWeight: 600, textDecoration: 'underline', marginTop: '4px', display: 'inline-block' }}
+              >
+                Abrir endpoint oficial da API da Câmara ↗
               </a>
-            )}
-          </div>
-        </li>
-      ))}
-    </ul>
+            </div>
+            <div className="data-row__side">
+              <span className="chip">Câmara Federal</span>
+            </div>
+          </li>
+        )}
+
+        {alespId && (
+          <li className="data-row">
+            <div className="data-row__main">
+              <div className="data-row__title">Assembleia Legislativa do Estado de SP (ALESP)</div>
+              <div className="muted small">Portal da Transparência ALESP · Matrícula: {alespId}</div>
+              <a
+                href={alespService.getPaginaOficialUrl(alespId)}
+                target="_blank"
+                rel="noreferrer noopener"
+                style={{ fontSize: '0.85rem', color: 'var(--text-main)', fontWeight: 600, textDecoration: 'underline', marginTop: '4px', display: 'inline-block' }}
+              >
+                Abrir perfil oficial na ALESP ↗
+              </a>
+            </div>
+            <div className="data-row__side">
+              <span className="chip">ALESP</span>
+            </div>
+          </li>
+        )}
+
+        {res.data?.map((f) => (
+          <li key={f.id} className="data-row">
+            <div className="data-row__main">
+              <div className="data-row__title">{f.titulo}</div>
+              <div className="muted small">
+                {[f.orgao, f.tipo].filter(Boolean).join(' · ')} · Consulta realizada em {formatarData(f.data_consulta)}
+              </div>
+              {f.url && (
+                <a href={f.url} target="_blank" rel="noreferrer noopener" style={{ fontSize: '0.85rem', color: 'var(--text-main)', fontWeight: 600, textDecoration: 'underline', marginTop: '4px', display: 'inline-block' }}>
+                  Acessar base de dados oficial ↗
+                </a>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -209,16 +471,27 @@ export function PerfilPage() {
   const [tab, setTab] = useState<TabId>('geral');
   const res = useAsync(() => perfilService.carregar(id), [id]);
 
+  const p = res.data;
+  const identificadores = (p?.pessoa as any)?.identificadores_externos || {};
+  const camaraId: number | undefined = identificadores.camara_id;
+  const alespId: string | undefined = identificadores.alesp_id;
+
+  // Carregar detalhes ao vivo do gabinete da Câmara
+  const resCamaraDetalhe = useAsync<CamaraDeputadoDetalhe | null>(
+    () => (camaraId ? camaraService.getDeputado(camaraId) : Promise.resolve(null)),
+    [camaraId],
+  );
+
   if (res.loading) return <Loading />;
   if (res.error) return <ErrorBox error={res.error} />;
-  if (!res.data) return <EmptyState title="Político não encontrado" />;
+  if (!p) return <EmptyState title="Político não encontrado" />;
 
-  const p = res.data;
   const atual = p.mandatoAtual;
   const eleita = p.candidaturas
     .filter((c) => c.resultado?.startsWith('eleito'))
     .sort((a, b) => (b.eleicao?.ano ?? 0) - (a.eleicao?.ano ?? 0))[0];
   const nome = p.pessoa.nome_politico ?? p.pessoa.nome_civil;
+  const gabinete = resCamaraDetalhe.data?.ultimoStatus?.gabinete;
 
   return (
     <>
@@ -228,7 +501,7 @@ export function PerfilPage() {
         </Link>
       </div>
 
-      {/* Header do Perfil com Foto em Destaque */}
+      {/* Header do Perfil Responsivo com Foto em Destaque */}
       <header className="profile-hero">
         <div className="profile-hero__photo-wrapper">
           {p.pessoa.foto_url ? (
@@ -251,12 +524,14 @@ export function PerfilPage() {
             <span className="chip" style={{ backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-text)', borderColor: 'var(--status-success-border)' }}>
               🟢 {atual ? rotuloSituacao(atual.situacao) : 'Mandato Ativo'}
             </span>
+            {camaraId && <span className="fonte-badge">ID Câmara: {camaraId}</span>}
+            {alespId && <span className="fonte-badge">ID ALESP: {alespId}</span>}
           </div>
 
           <h1 className="profile-hero__name">{nome}</h1>
           {p.pessoa.nome_politico && p.pessoa.nome_civil && p.pessoa.nome_civil !== p.pessoa.nome_politico && (
             <div className="profile-hero__civil">
-              Nome civil registrado: <strong>{p.pessoa.nome_civil}</strong>
+              Nome civil: <strong>{p.pessoa.nome_civil}</strong>
             </div>
           )}
 
@@ -281,10 +556,19 @@ export function PerfilPage() {
               <dd>{atual?.inicio ? formatarData(atual.inicio) : '2023'}</dd>
             </div>
           </dl>
+
+          {/* Dados Oficiais do Gabinete em Brasília */}
+          {gabinete && (
+            <div style={{ marginTop: '14px', padding: '10px 14px', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)', fontSize: '0.82rem', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
+              <div>🏢 Gabinete: <strong>{gabinete.predio ? `Prédio ${gabinete.predio}, Sala ${gabinete.sala}` : gabinete.nome}</strong></div>
+              {gabinete.telefone && <div>📞 Tel: <strong>{gabinete.telefone}</strong></div>}
+              {gabinete.email && <div>✉️ Email: <strong>{gabinete.email}</strong></div>}
+            </div>
+          )}
         </div>
       </header>
 
-      {/* Navegação por Abas */}
+      {/* Navegação por Abas com Scroll Touch */}
       <div className="profile-tabs" role="tablist" aria-label="Seções do perfil">
         {TABS.map((t) => (
           <button
@@ -300,7 +584,7 @@ export function PerfilPage() {
         ))}
       </div>
 
-      <section role="tabpanel" style={{ background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '24px', boxShadow: 'var(--shadow-sm)' }}>
+      <section role="tabpanel" style={{ background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '20px', boxShadow: 'var(--shadow-sm)' }}>
         <div className="cargo-helper" style={{ marginBottom: '20px' }}>
           <div className="cargo-helper__icon">ℹ️</div>
           <div className="cargo-helper__content">
@@ -309,6 +593,11 @@ export function PerfilPage() {
         </div>
 
         {tab === 'geral' && <Metricas perfil={p} />}
+        {tab === 'propostas' && <PropostasAba pessoaId={p.pessoa.id} camaraId={camaraId} />}
+        {tab === 'gastos' && <GastosAba camaraId={camaraId} />}
+        {tab === 'comissoes' && <ComissoesAba pessoaId={p.pessoa.id} camaraId={camaraId} />}
+        {tab === 'discursos' && <DiscursosAba camaraId={camaraId} />}
+        {tab === 'presenca' && <Metricas perfil={p} />}
         {tab === 'historico' && <Timeline perfil={p} />}
         {tab === 'mandato' && (
           p.mandatos.length === 0 ? (
@@ -333,8 +622,7 @@ export function PerfilPage() {
             </ul>
           )
         )}
-        {LISTAS[tab] && <ListaAba pessoaId={p.pessoa.id} tab={tab} />}
-        {tab === 'fontes' && <FontesAba perfil={p} />}
+        {tab === 'fontes' && <FontesAba perfil={p} camaraId={camaraId} alespId={alespId} />}
       </section>
     </>
   );

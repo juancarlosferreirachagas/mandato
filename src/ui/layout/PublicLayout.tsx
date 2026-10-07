@@ -10,21 +10,31 @@ export function PublicLayout() {
           <Link to="/" className="brand" aria-label="MANDATO — página inicial">
             <span className="brand__mark" aria-hidden>M</span>
             <span className="brand__name">MANDATO</span>
+            <span className="brand__tag">SP</span>
           </Link>
-          <nav className="nav" aria-label="Principal">
-            {SECOES.map((s) => (
-              <NavLink key={s.path} to={`/${s.path}`} className={({ isActive }) => (isActive ? 'nav__link is-active' : 'nav__link')}>
-                {s.label}
-              </NavLink>
-            ))}
-          </nav>
-          <Link to="/admin" className="btn btn--ghost">Admin</Link>
+
+          <div className="nav-wrapper">
+            <nav className="nav" aria-label="Navegação Principal">
+              {SECOES.map((s) => (
+                <NavLink
+                  key={s.path}
+                  to={`/${s.path}`}
+                  className={({ isActive }) => (isActive ? 'nav__link is-active' : 'nav__link')}
+                >
+                  {s.label}
+                </NavLink>
+              ))}
+            </nav>
+            <Link to="/admin" className="btn btn--ghost" style={{ padding: '6px 10px', fontSize: '0.8rem' }}>
+              ⚙️ Admin
+            </Link>
+          </div>
         </div>
       </header>
 
       {!isSupabaseConfigured && (
         <div className="banner" role="status">
-          Supabase não configurado — copie <code>.env.example</code> para <code>.env</code> e preencha as chaves. Nenhum dado é simulado.
+          Supabase não configurado — preencha as chaves no <code>.env</code>.
         </div>
       )}
 
@@ -34,8 +44,12 @@ export function PublicLayout() {
 
       <footer className="footer">
         <div className="container">
-          <strong>MANDATO</strong> — plataforma independente. Fato → Fonte → Interpretação. Nenhum político é classificado, rotulado ou
-          julgado pela plataforma.
+          <p style={{ marginBottom: '8px' }}>
+            <strong>MANDATO</strong> — Observatório Político Factual e Independente.
+          </p>
+          <p className="muted small">
+            Fato → Fonte → Interpretação. Todos os dados e fotos provêm dos portais oficiais de transparência da Câmara dos Deputados, ALESP, Senado Federal e TSE.
+          </p>
         </div>
       </footer>
     </div>
