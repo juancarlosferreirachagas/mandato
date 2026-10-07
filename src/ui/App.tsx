@@ -13,6 +13,7 @@ import { ImportacoesAdmin } from './admin/ImportacoesAdmin';
 import { AuditoriaAdmin } from './admin/AuditoriaAdmin';
 import { SECOES } from './navigation';
 import { PoliticosPage } from './pages/PoliticosPage';
+import { VotacoesPage } from './pages/VotacoesPage';
 
 export function App() {
   return (
@@ -21,7 +22,8 @@ export function App() {
         <Route index element={<HomePage />} />
         <Route path="politicos" element={<PoliticosPage />} />
         <Route path="politicos/:id" element={<PerfilPage />} />
-        {SECOES.filter((s) => s.path !== 'politicos').map((s) => (
+        <Route path="votacoes" element={<VotacoesPage />} />
+        {SECOES.filter((s) => s.path !== 'politicos' && s.path !== 'votacoes').map((s) => (
           <Route key={s.path} path={s.path} element={<SecaoPage secao={s} />} />
         ))}
         <Route path="*" element={<NotFoundPage />} />
