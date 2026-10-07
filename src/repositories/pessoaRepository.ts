@@ -13,21 +13,27 @@ export interface EleitoCard {
   nomeCivil: string;
   fotoUrl: string | null;
   partido: string | null;
+  cargoCodigo?: string;
+  cargoNome?: string;
   votos: number | null;
   situacao: string;
 }
 
 export const pessoaRepository = {
-  /** Eleitos/mandatos de um cargo numa UF. Ordenados por votos (desc). */
-  async listarEleitos(cargoCodigo: string, uf: string): Promise<EleitoCard[]> {
-    const { data, error } = await db()
+  /** Eleitos/mandatos de um cargo numa UF ou todos se cargoCodigo for omitido/todos. */
+  async listarEleitos(cargoCodigo?: string, uf = 'SP'): Promise<EleitoCard[]> {
+    let query = db()
       .from('mandatos')
       .select(
-        'id, situacao, cargo:cargos!inner(codigo), localidade:localidades!inner(sigla), partido:partidos(sigla), pessoa:pessoas(id,nome_civil,nome_politico,foto_url), candidatura:candidaturas(votos)',
+        'id, situacao, cargo:cargos!inner(codigo,nome), localidade:localidades!inner(sigla), partido:partidos(sigla), pessoa:pessoas(id,nome_civil,nome_politico,foto_url), candidatura:candidaturas(votos)',
       )
-      .eq('cargo.codigo', cargoCodigo)
-      .eq('localidade.sigla', uf)
-      .limit(300);
+      .eq('localidade.sigla', uf);
+
+    if (cargoCodigo && cargoCodigo !== 'todos') {
+      query = query.eq('cargo.codigo', cargoCodigo);
+    }
+
+    const { data, error } = await query.limit(500);
     if (error) throw error;
     return (data ?? [])
       .map((m: any) => ({
@@ -37,13 +43,15 @@ export const pessoaRepository = {
         nomeCivil: m.pessoa.nome_civil,
         fotoUrl: m.pessoa.foto_url,
         partido: m.partido?.sigla ?? null,
+        cargoCodigo: m.cargo?.codigo,
+        cargoNome: m.cargo?.nome,
         votos: m.candidatura?.votos ?? null,
         situacao: m.situacao,
       }))
       .sort((a, b) => (b.votos ?? -1) - (a.votos ?? -1) || a.nome.localeCompare(b.nome, 'pt-BR'));
   },
 
-  /** Busca por nome político ou civil (ILIKE). Para volume maior, trocar por RPC com pg_trgm. */
+  /** Busca por nome político ou civil (ILIKE). */
   async search(term: string, limit = 20): Promise<PessoaResumo[]> {
     const t = term.trim().replace(/[%,()]/g, ' ');
     if (t.length < 2) return [];
