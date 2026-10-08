@@ -36,6 +36,7 @@ const ANO = Number(need('ano'));
 const TURNO = Number(args.turno ?? 1);
 const DRY = Boolean(args['dry-run']);
 const FONTE_URL = need('fonte-url');
+const MUNICIPIO = args.municipio ? norm(args.municipio) : null;
 
 // ---------- constantes de domínio ----------
 // Cargos suportados nesta etapa (DS_CARGO do TSE -> cargos.codigo)
@@ -44,6 +45,8 @@ const CARGOS = {
   SENADOR: 'senador',
   'DEPUTADO FEDERAL': 'deputado_federal',
   'DEPUTADO ESTADUAL': 'deputado_estadual',
+  PREFEITO: 'prefeito',
+  VEREADOR: 'vereador',
 };
 // Início de mandato (regra constitucional/regimental) — VERIFICAR antes de produção.
 const INICIO_MANDATO = {
@@ -51,8 +54,17 @@ const INICIO_MANDATO = {
   senador: `${ANO + 1}-02-01`,
   deputado_federal: `${ANO + 1}-02-01`,
   deputado_estadual: `${ANO + 1}-03-15`,
+  prefeito: `${ANO + 1}-01-01`,
+  vereador: `${ANO + 1}-01-01`,
 };
-const FIM_MANDATO = { governador: `${ANO + 4}-12-31`, senador: `${ANO + 8}-01-31`, deputado_federal: `${ANO + 4}-01-31`, deputado_estadual: `${ANO + 4}-03-14` };
+const FIM_MANDATO = { 
+  governador: `${ANO + 4}-12-31`, 
+  senador: `${ANO + 8}-01-31`, 
+  deputado_federal: `${ANO + 4}-01-31`, 
+  deputado_estadual: `${ANO + 4}-03-14`,
+  prefeito: `${ANO + 4}-12-31`,
+  vereador: `${ANO + 4}-12-31`,
+};
 
 const RESULTADO = (s) => {
   const t = norm(s);
@@ -102,7 +114,7 @@ function table(text, required) {
 }
 
 // ---------- main ----------
-const REQ_CAND = ['SQ_CANDIDATO', 'NR_TURNO', 'SG_UF', 'DS_CARGO', 'NM_CANDIDATO', 'NM_URNA_CANDIDATO', 'NR_CPF_CANDIDATO',
+const REQ_CAND = ['SQ_CANDIDATO', 'NR_TURNO', 'SG_UF', 'NM_UE', 'DS_CARGO', 'NM_CANDIDATO', 'NM_URNA_CANDIDATO', 'NR_CPF_CANDIDATO',
   'SG_PARTIDO', 'NM_PARTIDO', 'NR_PARTIDO', 'NR_CANDIDATO', 'DS_SITUACAO_CANDIDATURA', 'DS_SIT_TOT_TURNO', 'DT_NASCIMENTO'];
 
 const candText = await readText(need('consulta'));
@@ -123,7 +135,13 @@ if (args.votacao && args.votacao !== true) {
 
 const get = (r, c) => r[cand.idx[c]]?.trim();
 const linhas = cand.rows
-  .filter((r) => get(r, 'SG_UF') === UF && Number(get(r, 'NR_TURNO')) === TURNO && CARGOS[norm(get(r, 'DS_CARGO'))])
+  .filter((r) => {
+    const isUf = get(r, 'SG_UF') === UF;
+    const isTurno = Number(get(r, 'NR_TURNO')) === TURNO;
+    const isCargo = CARGOS[norm(get(r, 'DS_CARGO'))];
+    const isMun = MUNICIPIO ? norm(get(r, 'NM_UE')) === MUNICIPIO : true;
+    return isUf && isTurno && isCargo && isMun;
+  })
   .map((r) => ({
     sq: get(r, 'SQ_CANDIDATO'),
     cargo: CARGOS[norm(get(r, 'DS_CARGO'))],
@@ -137,6 +155,7 @@ const linhas = cand.rows
     situacao: get(r, 'DS_SITUACAO_CANDIDATURA'),
     resultado: RESULTADO(get(r, 'DS_SIT_TOT_TURNO')),
     nasc: parseData(get(r, 'DT_NASCIMENTO')),
+    municipio: norm(get(r, 'NM_UE')),
     votos: votos.get(`${get(r, 'SQ_CANDIDATO')}|${get(r, 'NR_TURNO')}`) ?? null,
   }));
 
@@ -169,12 +188,21 @@ const fonte = ok(await db.from('fontes').insert({
 }).select('id').single(), 'fonte');
 
 // Referências
-const eleicao = ok(await db.from('eleicoes').select('id').eq('ano', ANO).eq('tipo', 'geral').eq('turno', TURNO).maybeSingle(), 'eleicao');
-if (!eleicao) throw new Error(`Eleição ${ANO} turno ${TURNO} não existe (rode o seed).`);
+const TIPO_ELEICAO = ANO % 4 === 0 ? 'municipal' : 'geral'; // 2020, 2024 são municipais; 2018, 2022, 2026 são gerais
+const eleicao = ok(await db.from('eleicoes').select('id').eq('ano', ANO).eq('tipo', TIPO_ELEICAO).eq('turno', TURNO).maybeSingle(), 'eleicao');
+if (!eleicao) throw new Error(`Eleição ${ANO} turno ${TURNO} (${TIPO_ELEICAO}) não existe (rode o seed).`);
 const uf = ok(await db.from('localidades').select('id').eq('tipo', 'estado').eq('sigla', UF).single(), 'uf');
 const cargos = Object.fromEntries(ok(await db.from('cargos').select('id,codigo'), 'cargos').map((c) => [c.codigo, c.id]));
 const orgaos = Object.fromEntries(ok(await db.from('orgaos').select('id,sigla'), 'orgaos').map((o) => [o.sigla, o.id]));
-const ORGAO = { senador: 'SF', deputado_federal: 'CD', deputado_estadual: UF === 'SP' ? 'ALESP' : null, governador: null };
+const ORGAO = { senador: 'SF', deputado_federal: 'CD', deputado_estadual: UF === 'SP' ? 'ALESP' : null, governador: null, prefeito: null, vereador: null };
+
+// Municípios (se houver candidaturas municipais)
+const munNomes = [...new Set(linhas.map(l => l.municipio).filter(Boolean))];
+let munId = {};
+if (munNomes.length > 0) {
+  const munData = ok(await db.from('localidades').select('id,nome').eq('tipo', 'municipio').in('nome', munNomes), 'municipios');
+  munId = Object.fromEntries(munData.map(m => [norm(m.nome), m.id]));
+}
 
 // Partidos
 const partidos = [...new Map(linhas.map((l) => [l.sigla, l])).values()];
@@ -198,7 +226,7 @@ for (const part of chunk(unique.map((p) => p.cpf_hash), 200)) {
 
 // Candidaturas
 const candRows = linhas.map((l) => ({
-  eleicao_id: eleicao.id, pessoa_id: pessoaId.get(hashCpf(l.cpf)), cargo_id: cargos[l.cargo], circunscricao_id: uf.id,
+  eleicao_id: eleicao.id, pessoa_id: pessoaId.get(hashCpf(l.cpf)), cargo_id: cargos[l.cargo], circunscricao_id: l.municipio ? (munId[l.municipio] || uf.id) : uf.id,
   partido_id: partidoId[l.sigla], numero_candidato: l.numero, nome_urna: l.urna, votos: l.votos,
   situacao: l.situacao, resultado: l.resultado, fonte_id: fonte.id,
 }));
@@ -212,7 +240,7 @@ for (const part of chunk(eleitos.map((l) => pessoaId.get(hashCpf(l.cpf))), 200))
 const mandatoRows = eleitos.map((l) => {
   const pid = pessoaId.get(hashCpf(l.cpf));
   return {
-    pessoa_id: pid, cargo_id: cargos[l.cargo], orgao_id: orgaos[ORGAO[l.cargo]] ?? null, localidade_id: uf.id,
+    pessoa_id: pid, cargo_id: cargos[l.cargo], orgao_id: orgaos[ORGAO[l.cargo]] ?? null, localidade_id: l.municipio ? (munId[l.municipio] || uf.id) : uf.id,
     candidatura_id: candIds.get(`${pid}|${cargos[l.cargo]}`), partido_id: partidoId[l.sigla],
     inicio: INICIO_MANDATO[l.cargo], fim: FIM_MANDATO[l.cargo], situacao: 'eleito_nao_empossado', fonte_id: fonte.id,
   };
