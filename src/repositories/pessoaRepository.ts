@@ -27,7 +27,8 @@ export const pessoaRepository = {
       .select(
         'id, situacao, cargo:cargos!inner(codigo,nome), localidade:localidades!inner(sigla), partido:partidos(sigla), pessoa:pessoas(id,nome_civil,nome_politico,foto_url), candidatura:candidaturas(votos)',
       )
-      .eq('localidade.sigla', uf);
+      .eq('localidade.sigla', uf)
+      .in('situacao', ['em_exercicio', 'eleito_nao_empossado']);
 
     if (cargoCodigo && cargoCodigo !== 'todos') {
       query = query.eq('cargo.codigo', cargoCodigo);
