@@ -16,4 +16,5 @@ export const SECOES: Secao[] = [
   { path: 'emendas', label: 'Emendas', descricao: 'Emendas legislativas e orçamentárias.' },
   { path: 'promessas', label: 'Promessas', descricao: 'Promessas registradas e suas avaliações fundamentadas.' },
   { path: 'fontes', label: 'Fontes', descricao: 'Fontes e documentos que sustentam cada informação.' },
+  { path: 'guarulhos/orcamento', label: 'Guarulhos (Orçamento)', descricao: 'Despesas e orçamento oficial de Guarulhos.' }
 ];

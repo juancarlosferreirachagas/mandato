@@ -14,6 +14,7 @@ import { AuditoriaAdmin } from './admin/AuditoriaAdmin';
 import { SECOES } from './navigation';
 import { PoliticosPage } from './pages/PoliticosPage';
 import { VotacoesPage } from './pages/VotacoesPage';
+import { OrcamentoGuarulhosPage } from './pages/OrcamentoGuarulhosPage';
 
 export function App() {
   return (
@@ -23,6 +24,7 @@ export function App() {
         <Route path="politicos" element={<PoliticosPage />} />
         <Route path="politicos/:id" element={<PerfilPage />} />
         <Route path="votacoes" element={<VotacoesPage />} />
+        <Route path="guarulhos/orcamento" element={<OrcamentoGuarulhosPage />} />
         {SECOES.filter((s) => s.path !== 'politicos' && s.path !== 'votacoes').map((s) => (
           <Route key={s.path} path={s.path} element={<SecaoPage secao={s} />} />
         ))}
