@@ -43,8 +43,7 @@ function CardFoto({ nome, fotoUrl }: { nome: string; fotoUrl: string | null }) {
 
 export function PoliticosPage() {
   const [params, setParams] = useSearchParams();
-  const cargoParam = params.get('cargo') || 'deputado_estadual';
-  const cargoAtual = CARGOS.find((c) => c.codigo === cargoParam) ?? CARGOS[4];
+  const cargoParam = params.get('cargo');
 
   const [q, setQ] = useState('');
   const [partidoFiltro, setPartidoFiltro] = useState('TODOS');
@@ -65,6 +64,28 @@ export function PoliticosPage() {
     });
     return Array.from(pSet).sort();
   }, [todosEleitos]);
+
+  const contasPorCargo = useMemo(() => {
+    const counts: Record<string, number> = { todos: todosEleitos.length };
+    todosEleitos.forEach(e => {
+      if (e.cargoCodigo) {
+        counts[e.cargoCodigo] = (counts[e.cargoCodigo] || 0) + 1;
+      }
+    });
+    return counts;
+  }, [todosEleitos]);
+
+  const cargosDisponiveis = useMemo(() => {
+    return CARGOS.filter(c => contasPorCargo[c.codigo] > 0);
+  }, [contasPorCargo]);
+
+  const cargoAtual = useMemo(() => {
+    const valid = cargosDisponiveis.find(c => c.codigo === cargoParam);
+    if (valid) return valid;
+    // se não achou no parametro (ou tá vazio), pega deputados se houver, ou o primeiro
+    const preferido = cargosDisponiveis.find(c => c.codigo === 'deputado_estadual');
+    return preferido || cargosDisponiveis[0] || CARGOS[0];
+  }, [cargosDisponiveis, cargoParam]);
 
   // Busca do cargo selecionado
   const resCargo = useAsync(
@@ -89,7 +110,7 @@ export function PoliticosPage() {
   return (
     <>
       <header className="page-header">
-        <h1 className="page-title">Representantes Eleitos de São Paulo</h1>
+        <h1 className="page-title">Representantes Eleitos</h1>
         <p className="page-lead">
           Conheça quem ocupa cada cargo público, quanto recebeu de votos e acompanhe sua atuação parlamentar com dados 100% oficiais e auditáveis.
         </p>
@@ -97,7 +118,7 @@ export function PoliticosPage() {
 
       {/* Abas com ícones e contadores */}
       <div className="cargo-pills" role="tablist" aria-label="Selecione o cargo">
-        {CARGOS.map((c) => {
+        {cargosDisponiveis.map((c) => {
           const ativo = c.codigo === cargoAtual.codigo;
           return (
             <button
@@ -112,11 +133,7 @@ export function PoliticosPage() {
             >
               <span>{c.icone}</span>
               <span>{c.label}</span>
-              {c.codigo === 'governador' && <span className="cargo-pill__badge">1</span>}
-              {c.codigo === 'senador' && <span className="cargo-pill__badge">3</span>}
-              {c.codigo === 'deputado_federal' && <span className="cargo-pill__badge">70</span>}
-              {c.codigo === 'deputado_estadual' && <span className="cargo-pill__badge">94</span>}
-              {c.codigo === 'todos' && <span className="cargo-pill__badge">168</span>}
+              <span className="cargo-pill__badge">{contasPorCargo[c.codigo]}</span>
             </button>
           );
         })}
