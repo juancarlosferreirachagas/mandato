@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "sync:tcesp": "tsx scripts/fetch-tcesp.ts",
+    "sync:tcesp:dry": "tsx scripts/fetch-tcesp.ts --dry-run"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
@@ -16,9 +18,12 @@
     "react-router-dom": "^6.27.0"
   },
   "devDependencies": {
+    "@types/node": "^26.6.4",
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.1",
     "@vitejs/plugin-react": "^4.3.3",
+    "dotenv": "^18.0.6",
+    "tsx": "^4.23.15",
     "typescript": "^5.6.3",
     "vite": "^5.4.10"
   }
