@@ -36,6 +36,7 @@ const ANO = Number(need('ano'));
 const TURNO = Number(args.turno ?? 1);
 const DRY = Boolean(args['dry-run']);
 const FONTE_URL = need('fonte-url');
+const norm = (s = '') => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().trim();
 const MUNICIPIO = args.municipio ? norm(args.municipio) : null;
 
 // ---------- constantes de domínio ----------
@@ -77,7 +78,6 @@ const RESULTADO = (s) => {
   if (t.includes('NULO')) return 'anulado';
   return 'pendente';
 };
-const norm = (s = '') => s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toUpperCase().trim();
 
 // ---------- CSV ----------
 async function readText(path) {
@@ -230,7 +230,8 @@ const candRows = linhas.map((l) => ({
   partido_id: partidoId[l.sigla], numero_candidato: l.numero, nome_urna: l.urna, votos: l.votos,
   situacao: l.situacao, resultado: l.resultado, fonte_id: fonte.id,
 }));
-for (const part of chunk(candRows, 300)) ok(await db.from('candidaturas').upsert(part, { onConflict: 'eleicao_id,pessoa_id,cargo_id' }), 'candidaturas');
+const uniqueCands = [...new Map(candRows.map((c) => [`${c.eleicao_id}|${c.pessoa_id}|${c.cargo_id}`, c])).values()];
+for (const part of chunk(uniqueCands, 300)) ok(await db.from('candidaturas').upsert(part, { onConflict: 'eleicao_id,pessoa_id,cargo_id' }), 'candidaturas');
 
 // Mandatos dos eleitos
 const candIds = new Map();

@@ -53,7 +53,7 @@ export function VotacoesPage() {
             id="busca-votacao"
             className="search__input"
             type="search"
-            placeholder="🔍 Buscar por projeto (ex: Reforma Tributária, Sabesp, Enfermagem)..."
+            placeholder="Buscar por projeto (ex: Reforma Tributária, Sabesp, Enfermagem)..."
             value={busca}
             onChange={(e) => setBusca(e.target.value)}
           />

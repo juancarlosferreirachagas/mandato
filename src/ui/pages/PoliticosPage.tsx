@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
+import { Users, Landmark, MapPin, Building2, User, Scale } from 'lucide-react';
 import { pessoaRepository } from '@/repositories/pessoaRepository';
 import { isSupabaseConfigured } from '@/database/client';
 import { rotuloSituacao } from '@/domain/rules';
@@ -8,13 +9,13 @@ import { EmptyState, ErrorBox, Loading } from '../components/common';
 import { PartyBadge } from '../components/PartyBadge';
 
 const CARGOS = [
-  { codigo: 'todos', label: 'Todos os Eleitos', icone: '🏛️', ajuda: 'Todos os representantes em exercício.' },
-  { codigo: 'governador', label: 'Governador', icone: '🏢', ajuda: 'Comanda o Poder Executivo do Estado de São Paulo, administra a segurança pública, saúde, educação estadual e orçamento.' },
-  { codigo: 'senador', label: 'Senadores', icone: '⚖️', ajuda: 'Representam o Estado de São Paulo em Brasília no Senado Federal (3 vagas). Votam leis nacionais e fiscalizam o governo federal.' },
-  { codigo: 'deputado_federal', label: 'Deputados Federais', icone: '👥', ajuda: 'Representam o povo na Câmara dos Deputados em Brasília (70 vagas). Criam leis federais e destinam emendas para os municípios.' },
-  { codigo: 'deputado_estadual', label: 'Deputados Estaduais', icone: '🏛️', ajuda: 'Trabalham na ALESP (Assembleia Legislativa de SP - 94 vagas). Criam leis estaduais e fiscalizam os gastos do Governador.' },
-  { codigo: 'prefeito', label: 'Prefeito', icone: '🏙️', ajuda: 'Comanda o Poder Executivo Municipal (Prefeitura).' },
-  { codigo: 'vereador', label: 'Vereadores', icone: '🗣️', ajuda: 'Trabalham na Câmara Municipal. Criam leis municipais e fiscalizam o Prefeito.' },
+  { codigo: 'todos', label: 'Todos os Eleitos', icone: <Users size={18} />, ajuda: 'Todos os representantes em exercício.' },
+  { codigo: 'governador', label: 'Governador', icone: <Building2 size={18} />, ajuda: 'Comanda o Poder Executivo do Estado de São Paulo, administra a segurança pública, saúde, educação estadual e orçamento.' },
+  { codigo: 'senador', label: 'Senadores', icone: <Scale size={18} />, ajuda: 'Representam o Estado de São Paulo em Brasília no Senado Federal (3 vagas). Votam leis nacionais e fiscalizam o governo federal.' },
+  { codigo: 'deputado_federal', label: 'Deputados Federais', icone: <MapPin size={18} />, ajuda: 'Representam o povo na Câmara dos Deputados em Brasília (70 vagas). Criam leis federais e destinam emendas para os municípios.' },
+  { codigo: 'deputado_estadual', label: 'Deputados Estaduais', icone: <Landmark size={18} />, ajuda: 'Trabalham na ALESP (Assembleia Legislativa de SP - 94 vagas). Criam leis estaduais e fiscalizam os gastos do Governador.' },
+  { codigo: 'prefeito', label: 'Prefeito', icone: <Building2 size={18} />, ajuda: 'Comanda o Poder Executivo Municipal (Prefeitura).' },
+  { codigo: 'vereador', label: 'Vereadores', icone: <User size={18} />, ajuda: 'Trabalham na Câmara Municipal. Criam leis municipais e fiscalizam o Prefeito.' },
 ];
 
 function CardFoto({ nome, fotoUrl }: { nome: string; fotoUrl: string | null }) {

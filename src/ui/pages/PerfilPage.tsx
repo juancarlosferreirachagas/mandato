@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { FileText, Vote, ScrollText, Calendar, Users, Briefcase, Mic, Clock, Landmark, Link as LinkIcon } from 'lucide-react';
 import { perfilService, type PerfilCompleto } from '@/services/perfilService';
 import { abasRepository, type LinhaAba } from '@/repositories/abasRepository';
 import { fonteRepository } from '@/repositories/adminRepositories';
@@ -22,17 +23,17 @@ type TabId =
   | 'geral' | 'votacoes' | 'propostas' | 'presenca' | 'comissoes' | 'frentes'
   | 'discursos' | 'historico' | 'mandato' | 'fontes';
 
-const TABS: { id: TabId; label: string; icone: string }[] = [
-  { id: 'geral', label: 'Resumo do Mandato', icone: '📊' },
-  { id: 'votacoes', label: 'Votações Importantes', icone: '🗳️' },
-  { id: 'propostas', label: 'Projetos de Lei', icone: '📜' },
-  { id: 'presenca', label: 'Presença & Trabalho', icone: '📅' },
-  { id: 'comissoes', label: 'Comissões', icone: '👥' },
-  { id: 'frentes', label: 'Frentes Parlamentares', icone: '🤝' },
-  { id: 'discursos', label: 'Discursos', icone: '🎙️' },
-  { id: 'historico', label: 'Histórico & Eleições', icone: '⏱️' },
-  { id: 'mandato', label: 'Mandatos', icone: '🏛️' },
-  { id: 'fontes', label: 'Fontes Oficiais', icone: '🔗' },
+const TABS: { id: TabId; label: string; icone: React.ReactNode }[] = [
+  { id: 'geral', label: 'Resumo do Mandato', icone: <FileText size={16} /> },
+  { id: 'votacoes', label: 'Votações Importantes', icone: <Vote size={16} /> },
+  { id: 'propostas', label: 'Projetos de Lei', icone: <ScrollText size={16} /> },
+  { id: 'presenca', label: 'Presença & Trabalho', icone: <Calendar size={16} /> },
+  { id: 'comissoes', label: 'Comissões', icone: <Users size={16} /> },
+  { id: 'frentes', label: 'Frentes Parlamentares', icone: <Briefcase size={16} /> },
+  { id: 'discursos', label: 'Discursos', icone: <Mic size={16} /> },
+  { id: 'historico', label: 'Histórico & Eleições', icone: <Clock size={16} /> },
+  { id: 'mandato', label: 'Mandatos', icone: <Landmark size={16} /> },
+  { id: 'fontes', label: 'Fontes Oficiais', icone: <LinkIcon size={16} /> },
 ];
 
 const AJUDA: Record<TabId, string> = {
@@ -62,7 +63,7 @@ function VotacoesAba({ cargoCodigo }: { cargoCodigo?: string }) {
     <div>
       <div className="camara-api-banner">
         <div>
-          <strong>🗳️ Principais Decisões Legislativas em Pauta</strong>
+          <strong>Principais Decisões Legislativas em Pauta</strong>
           <div className="muted small">
             Entenda o que estava em discussão, o resultado oficial e a fonte do registro.
           </div>
@@ -143,7 +144,7 @@ function PropostasAba({ pessoaId, camaraId }: { pessoaId: string; camaraId?: num
       <div>
         <div className="camara-api-banner">
           <div>
-            <strong>📜 Projetos de Lei e Proposições Oficiais</strong>
+            <strong>Projetos de Lei e Proposições Oficiais</strong>
             <div className="muted small">
               {proposicoesCamara.length} projetos de autoria oficial do parlamentar na Câmara dos Deputados.
             </div>
@@ -228,7 +229,7 @@ function PresencaAba({ perfil }: { perfil: PerfilCompleto }) {
     <div>
       <div className="camara-api-banner">
         <div>
-          <strong>📅 Registro de Frequência e Sessões Deliberativas</strong>
+          <strong>Registro de Frequência e Sessões Deliberativas</strong>
           <div className="muted small">Controle de presença oficial em plenário e reuniões obrigatórias.</div>
         </div>
         <span className="fonte-badge">Regimento Interno</span>
@@ -287,7 +288,7 @@ function ComissoesAba({ pessoaId, camaraId }: { pessoaId: string; camaraId?: num
       <div>
         <div className="camara-api-banner">
           <div>
-            <strong>👥 Comissões da Câmara dos Deputados</strong>
+            <strong>Comissões da Câmara dos Deputados</strong>
             <div className="muted small">Órgãos deliberativos e legislativos onde o deputado atua.</div>
           </div>
           <span className="fonte-badge">Câmara dos Deputados</span>
@@ -372,7 +373,7 @@ function FrentesAba({ camaraId }: { camaraId?: number }) {
     <div>
       <div className="camara-api-banner">
         <div>
-          <strong>🤝 Frentes Parlamentares Integradas ({frentes.length})</strong>
+          <strong>Frentes Parlamentares Integradas ({frentes.length})</strong>
           <div className="muted small">Grupos de atuação suprapartidária na Câmara dos Deputados.</div>
         </div>
         <span className="fonte-badge">57ª Legislatura</span>
@@ -617,6 +618,18 @@ export function PerfilPage() {
     [camaraId],
   );
 
+  const tabsDisponiveis = useMemo(() => {
+    return TABS.filter(t => {
+      // Always show these
+      if (['geral', 'historico', 'mandato', 'fontes'].includes(t.id)) return true;
+      // Show these ONLY if the politician has a camaraId or alespId (deputies/senators)
+      if (['votacoes', 'propostas', 'presenca', 'comissoes', 'frentes', 'discursos'].includes(t.id)) {
+        return Boolean(camaraId || alespId);
+      }
+      return false;
+    });
+  }, [camaraId, alespId]);
+
   if (res.loading) return <Loading />;
   if (res.error) return <ErrorBox error={res.error} />;
   if (!p) return <EmptyState title="Político não encontrado" />;
@@ -659,7 +672,7 @@ export function PerfilPage() {
           <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap' }}>
             <PartyBadge sigla={atual?.partido?.sigla} showName />
             <span className="chip" style={{ backgroundColor: 'var(--status-success-bg)', color: 'var(--status-success-text)', borderColor: 'var(--status-success-border)' }}>
-              🟢 {atual ? rotuloSituacao(atual.situacao) : 'Mandato Ativo'}
+              {atual ? rotuloSituacao(atual.situacao) : 'Mandato Ativo'}
             </span>
             {camaraId && <span className="fonte-badge">ID Câmara: {camaraId}</span>}
             {alespId && <span className="fonte-badge">ID ALESP: {alespId}</span>}
@@ -699,9 +712,9 @@ export function PerfilPage() {
           {/* Dados Oficiais do Gabinete em Brasília */}
           {gabinete && (
             <div style={{ marginTop: '14px', padding: '10px 14px', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-md)', fontSize: '0.82rem', display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-              <div>🏢 Gabinete: <strong>{gabinete.predio ? `Anexo ${gabinete.predio}, Sala ${gabinete.sala}` : gabinete.nome}</strong></div>
-              {gabinete.telefone && <div>📞 Tel: <strong>{gabinete.telefone}</strong></div>}
-              {gabinete.email && <div>✉️ Email: <strong>{gabinete.email}</strong></div>}
+              <div>Gabinete: <strong>{gabinete.predio ? `Anexo ${gabinete.predio}, Sala ${gabinete.sala}` : gabinete.nome}</strong></div>
+              {gabinete.telefone && <div>Tel: <strong>{gabinete.telefone}</strong></div>}
+              {gabinete.email && <div>Email: <strong>{gabinete.email}</strong></div>}
             </div>
           )}
 
@@ -717,7 +730,7 @@ export function PerfilPage() {
                   className="fonte-badge"
                   style={{ textDecoration: 'none' }}
                 >
-                  🔗 {url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+                  {url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
                 </a>
               ))}
             </div>
@@ -727,7 +740,7 @@ export function PerfilPage() {
 
       {/* Navegação por Abas com Scroll Touch */}
       <div className="profile-tabs" role="tablist" aria-label="Seções do perfil">
-        {TABS.map((t) => (
+        {tabsDisponiveis.map((t) => (
           <button
             key={t.id}
             role="tab"
@@ -735,17 +748,19 @@ export function PerfilPage() {
             className={`profile-tab ${tab === t.id ? 'is-active' : ''}`}
             onClick={() => setTab(t.id)}
           >
-            <span>{t.icone}</span>
+            <span className="profile-tab__icon">{t.icone}</span>
             <span>{t.label}</span>
           </button>
         ))}
       </div>
 
       <section role="tabpanel" style={{ background: '#ffffff', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-lg)', padding: '20px', boxShadow: 'var(--shadow-sm)' }}>
-        <div className="cargo-helper" style={{ marginBottom: '20px' }}>
-          <div className="cargo-helper__icon">ℹ️</div>
+        <div className="cargo-helper" style={{ marginBottom: '20px', padding: '12px 16px' }}>
           <div className="cargo-helper__content">
-            <p>{AJUDA[tab]}</p>
+            <p style={{ margin: 0, fontSize: '0.9rem' }}>
+              {tabsDisponiveis.find((t) => t.id === tab)?.label && <strong>{tabsDisponiveis.find((t) => t.id === tab)?.label}: </strong>}
+              {AJUDA[tab]}
+            </p>
           </div>
         </div>
 
