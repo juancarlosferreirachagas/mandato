@@ -1,4 +1,5 @@
 import { Route, Routes } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import { PublicLayout } from './layout/PublicLayout';
 import { HomePage } from './pages/HomePage';
 import { PerfilPage } from './pages/PerfilPage';
@@ -18,26 +19,29 @@ import { OrcamentoGuarulhosPage } from './pages/OrcamentoGuarulhosPage';
 
 export function App() {
   return (
-    <Routes>
-      <Route element={<PublicLayout />}>
-        <Route index element={<HomePage />} />
-        <Route path="politicos" element={<PoliticosPage />} />
-        <Route path="politicos/:id" element={<PerfilPage />} />
-        <Route path="votacoes" element={<VotacoesPage />} />
-        <Route path="guarulhos/orcamento" element={<OrcamentoGuarulhosPage />} />
-        {SECOES.filter((s) => s.path !== 'politicos' && s.path !== 'votacoes').map((s) => (
-          <Route key={s.path} path={s.path} element={<SecaoPage secao={s} />} />
-        ))}
-        <Route path="*" element={<NotFoundPage />} />
-      </Route>
+    <>
+      <Routes>
+        <Route element={<PublicLayout />}>
+          <Route index element={<HomePage />} />
+          <Route path="politicos" element={<PoliticosPage />} />
+          <Route path="politicos/:id" element={<PerfilPage />} />
+          <Route path="votacoes" element={<VotacoesPage />} />
+          <Route path="guarulhos/orcamento" element={<OrcamentoGuarulhosPage />} />
+          {SECOES.filter((s) => s.path !== 'politicos' && s.path !== 'votacoes').map((s) => (
+            <Route key={s.path} path={s.path} element={<SecaoPage secao={s} />} />
+          ))}
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
 
-      <Route path="admin/login" element={<LoginPage />} />
-      <Route path="admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
-        <Route index element={<AdminHome />} />
-        <Route path="fontes" element={<FontesAdmin />} />
-        <Route path="importacoes" element={<ImportacoesAdmin />} />
-        <Route path="auditoria" element={<AuditoriaAdmin />} />
-      </Route>
-    </Routes>
+        <Route path="admin/login" element={<LoginPage />} />
+        <Route path="admin" element={<AdminGuard><AdminLayout /></AdminGuard>}>
+          <Route index element={<AdminHome />} />
+          <Route path="fontes" element={<FontesAdmin />} />
+          <Route path="importacoes" element={<ImportacoesAdmin />} />
+          <Route path="auditoria" element={<AuditoriaAdmin />} />
+        </Route>
+      </Routes>
+      <Analytics />
+    </>
   );
 }
