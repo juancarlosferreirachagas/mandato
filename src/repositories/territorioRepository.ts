@@ -30,13 +30,17 @@ export const territorioRepository = {
 
 export const metricasRepository = {
   async porMandato(mandatoId: string, inicio?: string, fim?: string): Promise<MetricasMandato | null> {
-    const { data, error } = await db().rpc('metricas_mandato', {
-      p_mandato_id: mandatoId,
-      p_inicio: inicio ?? null,
-      p_fim: fim ?? null,
-    });
-    if (error) throw error;
-    const row = (data as any[] | null)?.[0];
-    return row ? (row as MetricasMandato) : null;
+    try {
+      const { data, error } = await db().rpc('metricas_mandato', {
+        p_mandato_id: mandatoId,
+        p_inicio: inicio ?? null,
+        p_fim: fim ?? null,
+      });
+      if (error) return null;
+      const row = (data as any[] | null)?.[0];
+      return row ? (row as MetricasMandato) : null;
+    } catch {
+      return null;
+    }
   },
 };

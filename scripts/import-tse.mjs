@@ -47,6 +47,7 @@ const CARGOS = {
   'DEPUTADO FEDERAL': 'deputado_federal',
   'DEPUTADO ESTADUAL': 'deputado_estadual',
   PREFEITO: 'prefeito',
+  'VICE-PREFEITO': 'vice_prefeito',
   VEREADOR: 'vereador',
 };
 // Início de mandato (regra constitucional/regimental) — VERIFICAR antes de produção.
@@ -56,6 +57,7 @@ const INICIO_MANDATO = {
   deputado_federal: `${ANO + 1}-02-01`,
   deputado_estadual: `${ANO + 1}-03-15`,
   prefeito: `${ANO + 1}-01-01`,
+  vice_prefeito: `${ANO + 1}-01-01`,
   vereador: `${ANO + 1}-01-01`,
 };
 const FIM_MANDATO = { 
@@ -64,6 +66,7 @@ const FIM_MANDATO = {
   deputado_federal: `${ANO + 4}-01-31`, 
   deputado_estadual: `${ANO + 4}-03-14`,
   prefeito: `${ANO + 4}-12-31`,
+  vice_prefeito: `${ANO + 4}-12-31`,
   vereador: `${ANO + 4}-12-31`,
 };
 
@@ -176,7 +179,11 @@ if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY || !CPF_HASH_SECRET) throw new E
 const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
 const ok = (r, ctx) => { if (r.error) throw new Error(`${ctx}: ${r.error.message}`); return r.data; };
 const chunk = (a, n) => Array.from({ length: Math.ceil(a.length / n) }, (_, i) => a.slice(i * n, i * n + n));
-const hashCpf = (cpf) => createHmac('sha256', CPF_HASH_SECRET).update(cpf.replace(/\D/g, '')).digest('hex');
+const hashPessoa = (l) => {
+  const digits = (l.cpf ?? '').replace(/\D/g, '');
+  const key = digits.length === 11 ? digits : `SQ:${l.sq}|${l.nome}`;
+  return createHmac('sha256', CPF_HASH_SECRET).update(key).digest('hex');
+};
 
 // Fonte
 const fonte = ok(await db.from('fontes').insert({
@@ -194,7 +201,7 @@ if (!eleicao) throw new Error(`Eleição ${ANO} turno ${TURNO} (${TIPO_ELEICAO})
 const uf = ok(await db.from('localidades').select('id').eq('tipo', 'estado').eq('sigla', UF).single(), 'uf');
 const cargos = Object.fromEntries(ok(await db.from('cargos').select('id,codigo'), 'cargos').map((c) => [c.codigo, c.id]));
 const orgaos = Object.fromEntries(ok(await db.from('orgaos').select('id,sigla'), 'orgaos').map((o) => [o.sigla, o.id]));
-const ORGAO = { senador: 'SF', deputado_federal: 'CD', deputado_estadual: UF === 'SP' ? 'ALESP' : null, governador: null, prefeito: null, vereador: null };
+const ORGAO = { senador: 'SF', deputado_federal: 'CD', deputado_estadual: UF === 'SP' ? 'ALESP' : null, governador: null, prefeito: 'PMG', vice_prefeito: 'PMG', vereador: 'CMG' };
 
 // Municípios (se houver candidaturas municipais)
 const munNomes = [...new Set(linhas.map(l => l.municipio).filter(Boolean))];
@@ -211,7 +218,7 @@ const partidoId = Object.fromEntries(ok(await db.from('partidos').select('id,sig
 
 // Pessoas (por cpf_hash)
 const pessoaRows = linhas.map((l) => ({
-  cpf_hash: hashCpf(l.cpf), nome_civil: l.nome, nome_politico: l.urna, data_nascimento: l.nasc,
+  cpf_hash: hashPessoa(l), nome_civil: l.nome, nome_politico: l.urna, data_nascimento: l.nasc,
   identificadores_externos: { tse_sq: { [ANO]: l.sq } }, fonte_id: fonte.id,
 }));
 const unique = [...new Map(pessoaRows.map((p) => [p.cpf_hash, p])).values()];
@@ -226,7 +233,7 @@ for (const part of chunk(unique.map((p) => p.cpf_hash), 200)) {
 
 // Candidaturas
 const candRows = linhas.map((l) => ({
-  eleicao_id: eleicao.id, pessoa_id: pessoaId.get(hashCpf(l.cpf)), cargo_id: cargos[l.cargo], circunscricao_id: l.municipio ? (munId[l.municipio] || uf.id) : uf.id,
+  eleicao_id: eleicao.id, pessoa_id: pessoaId.get(hashPessoa(l)), cargo_id: cargos[l.cargo], circunscricao_id: l.municipio ? (munId[l.municipio] || uf.id) : uf.id,
   partido_id: partidoId[l.sigla], numero_candidato: l.numero, nome_urna: l.urna, votos: l.votos,
   situacao: l.situacao, resultado: l.resultado, fonte_id: fonte.id,
 }));
@@ -235,11 +242,11 @@ for (const part of chunk(uniqueCands, 300)) ok(await db.from('candidaturas').ups
 
 // Mandatos dos eleitos
 const candIds = new Map();
-for (const part of chunk(eleitos.map((l) => pessoaId.get(hashCpf(l.cpf))), 200)) {
+for (const part of chunk(eleitos.map((l) => pessoaId.get(hashPessoa(l))), 200)) {
   for (const c of ok(await db.from('candidaturas').select('id,pessoa_id,cargo_id').eq('eleicao_id', eleicao.id).in('pessoa_id', part), 'cand sel')) candIds.set(`${c.pessoa_id}|${c.cargo_id}`, c.id);
 }
 const mandatoRows = eleitos.map((l) => {
-  const pid = pessoaId.get(hashCpf(l.cpf));
+  const pid = pessoaId.get(hashPessoa(l));
   return {
     pessoa_id: pid, cargo_id: cargos[l.cargo], orgao_id: orgaos[ORGAO[l.cargo]] ?? null, localidade_id: l.municipio ? (munId[l.municipio] || uf.id) : uf.id,
     candidatura_id: candIds.get(`${pid}|${cargos[l.cargo]}`), partido_id: partidoId[l.sigla],

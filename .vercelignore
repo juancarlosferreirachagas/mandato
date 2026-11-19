@@ -1,0 +1,10 @@
+node_modules
+dist
+.env
+.env.local
+.env.import
+data/
+TCE-2026/
+*.log
+.supabase
+scripts/

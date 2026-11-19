@@ -11,21 +11,27 @@ export interface LinhaAba {
   data?: string | null;
   badge?: string | null;
   fonteId?: string | null;
+  urlExterna?: string | null;
 }
 
-const clean = <T>(r: { data: T[] | null; error: unknown }): T[] => {
-  if (r.error) throw r.error;
-  return r.data ?? [];
-};
+async function safeQuery<T>(fn: () => PromiseLike<{ data: T[] | null; error: unknown }>): Promise<T[]> {
+  try {
+    const r = await fn();
+    if (r.error) return [];
+    return r.data ?? [];
+  } catch {
+    return [];
+  }
+}
 
 export const abasRepository = {
   async propostas(pessoaId: string): Promise<LinhaAba[]> {
-    const rows = clean(
-      await db()
+    const rows = (await safeQuery(() =>
+      db()
         .from('proposta_autores')
-        .select('id, papel, fonte_id, proposta:propostas(tipo,numero,ano,ementa,situacao,data_apresentacao)')
+        .select('id, papel, fonte_id, proposta:propostas(tipo,numero,ano,ementa,situacao,data_apresentacao,id_externo)')
         .eq('pessoa_id', pessoaId),
-    ) as any[];
+    )) as any[];
     return rows.map((r) => ({
       id: r.id,
       titulo: `${r.proposta.tipo} ${r.proposta.numero ?? ''}/${r.proposta.ano ?? ''}`,
@@ -33,16 +39,17 @@ export const abasRepository = {
       data: r.proposta.data_apresentacao,
       badge: `${r.papel} · ${r.proposta.situacao ?? 'sem situação'}`,
       fonteId: r.fonte_id,
+      urlExterna: r.proposta.id_externo?.startsWith('http') ? r.proposta.id_externo : null,
     }));
   },
 
   async votacoes(pessoaId: string): Promise<LinhaAba[]> {
-    const rows = clean(
-      await db()
+    const rows = (await safeQuery(() =>
+      db()
         .from('votos')
         .select('id, voto, fonte_id, votacao:votacoes(data,descricao,resultado), mandato:mandatos!inner(pessoa_id)')
         .eq('mandato.pessoa_id', pessoaId),
-    ) as any[];
+    )) as any[];
     return rows.map((r) => ({
       id: r.id,
       titulo: r.votacao.descricao ?? 'Votação',
@@ -54,14 +61,14 @@ export const abasRepository = {
   },
 
   async presencas(pessoaId: string): Promise<LinhaAba[]> {
-    const rows = clean(
-      await db()
+    const rows = (await safeQuery(() =>
+      db()
         .from('presencas')
         .select('id, data_sessao, tipo_sessao, situacao, justificativa, fonte_id, mandato:mandatos!inner(pessoa_id)')
         .eq('mandato.pessoa_id', pessoaId)
         .order('data_sessao', { ascending: false })
         .limit(200),
-    ) as any[];
+    )) as any[];
     return rows.map((r) => ({
       id: r.id,
       titulo: r.tipo_sessao ?? 'Sessão',
@@ -73,12 +80,12 @@ export const abasRepository = {
   },
 
   async emendas(pessoaId: string): Promise<LinhaAba[]> {
-    const rows = clean(
-      await db()
+    const rows = (await safeQuery(() =>
+      db()
         .from('proposta_emendas')
         .select('id, tipo, numero, ementa, valor, situacao, data, fonte_id, mandato:mandatos!autor_mandato_id!inner(pessoa_id)')
         .eq('mandato.pessoa_id', pessoaId),
-    ) as any[];
+    )) as any[];
     return rows.map((r) => ({
       id: r.id,
       titulo: `Emenda ${r.tipo} ${r.numero ?? ''}`.trim(),
@@ -90,12 +97,12 @@ export const abasRepository = {
   },
 
   async comissoes(pessoaId: string): Promise<LinhaAba[]> {
-    const rows = clean(
-      await db()
+    const rows = (await safeQuery(() =>
+      db()
         .from('membros_comissoes')
         .select('id, papel, inicio, fim, fonte_id, comissao:comissoes(nome,sigla), mandato:mandatos!inner(pessoa_id)')
         .eq('mandato.pessoa_id', pessoaId),
-    ) as any[];
+    )) as any[];
     return rows.map((r) => ({
       id: r.id,
       titulo: r.comissao.nome,
@@ -106,12 +113,12 @@ export const abasRepository = {
   },
 
   async promessas(pessoaId: string): Promise<LinhaAba[]> {
-    const rows = clean(
-      await db()
+    const rows = (await safeQuery(() =>
+      db()
         .from('promessas')
         .select('id, texto, contexto, data_declaracao, promessa_fontes(fonte_id), avaliacoes:promessa_avaliacoes(status,fonte_id)')
         .eq('pessoa_id', pessoaId),
-    ) as any[];
+    )) as any[];
     return rows.map((r) => ({
       id: r.id,
       titulo: r.texto,
@@ -123,9 +130,9 @@ export const abasRepository = {
   },
 
   async processos(pessoaId: string): Promise<LinhaAba[]> {
-    const rows = clean(
-      await db().from('processos').select('id, tribunal, numero, classe, situacao, posicao_declarada, fonte_id').eq('pessoa_id', pessoaId),
-    ) as any[];
+    const rows = (await safeQuery(() =>
+      db().from('processos').select('id, tribunal, numero, classe, situacao, posicao_declarada, fonte_id').eq('pessoa_id', pessoaId),
+    )) as any[];
     return rows.map((r) => ({
       id: r.id,
       titulo: `${r.classe ?? 'Processo'} ${r.numero ?? ''}`.trim(),

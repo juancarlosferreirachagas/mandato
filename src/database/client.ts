@@ -22,3 +22,17 @@ const client: SupabaseClient = createClient(url, anonKey);
 export function db(): SupabaseClient {
   return client;
 }
+
+/**
+ * Traduz erros crus do fetch/Supabase em mensagens acionáveis.
+ * "TypeError: Failed to fetch" significa que o navegador nem chegou ao servidor
+ * (DNS, projeto Supabase pausado/removido, rede offline ou bloqueio de CORS) —
+ * não é erro de SQL nem da função consultada.
+ */
+export function mensagemErroConsulta(nome: string, causa: unknown): string {
+  const texto = causa instanceof Error ? `${causa.name}: ${causa.message}` : String(causa);
+  if (/failed to fetch|networkerror|load failed|fetch failed/i.test(texto)) {
+    return `Sem conexão com o banco de dados (consulta ${nome}). O servidor não respondeu: verifique sua internet ou se o projeto Supabase está ativo.`;
+  }
+  return `Falha ao consultar ${nome}: ${texto}`;
+}
