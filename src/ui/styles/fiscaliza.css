@@ -1937,4 +1937,340 @@ a.fg-hbar:hover .fg-hbar__name {
   }
 }
 
+/* ==========================================================================
+   LINHA DO TEMPO ILUSTRADA, GRÁFICO MENSAL E CARDS ORDENADOS (262 DECRETOS & 212 DIÁRIOS)
+   ========================================================================== */
+
+/* Crachá de Ordem Sequencial (#001, #002...) */
+.fg-seq-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: var(--gru-red);
+  color: #ffffff;
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+
+/* Gráfico Mensal Interativo de Decretos e Diários */
+.fg-month-chart {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  gap: 8px;
+  align-items: end;
+  padding-top: 8px;
+}
+.fg-month-chart__col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 6px;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  cursor: pointer;
+  font: inherit;
+  transition: all 0.15s ease;
+}
+.fg-month-chart__col:hover {
+  border-color: var(--gru-blue);
+  background: #eff6ff;
+  transform: translateY(-1px);
+}
+.fg-month-chart__col.is-active {
+  background: var(--gru-blue);
+  border-color: var(--gru-red);
+  color: #ffffff;
+  box-shadow: 0 4px 12px rgba(22, 43, 77, 0.22);
+}
+.fg-month-chart__val {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #09152b;
+  white-space: nowrap;
+}
+.fg-month-chart__col.is-active .fg-month-chart__val {
+  color: #fbbf24;
+}
+.fg-month-chart__track {
+  width: 100%;
+  max-width: 28px;
+  height: 54px;
+  background: #e2e8f0;
+  border-radius: 6px;
+  display: flex;
+  align-items: flex-end;
+  overflow: hidden;
+}
+.fg-month-chart__col.is-active .fg-month-chart__track {
+  background: rgba(255, 255, 255, 0.16);
+}
+.fg-month-chart__fill {
+  width: 100%;
+  background: linear-gradient(180deg, var(--gru-red) 0%, var(--gru-blue) 100%);
+  border-radius: 6px 6px 0 0;
+  transition: height 0.25s ease;
+}
+.fg-month-chart__col.is-active .fg-month-chart__fill {
+  background: linear-gradient(180deg, #fbbf24 0%, #f59e0b 100%);
+}
+.fg-month-chart__lbl {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+.fg-month-chart__col.is-active .fg-month-chart__lbl {
+  color: #ffffff;
+}
+.fg-month-chart__cnt {
+  font-size: 0.65rem;
+  color: #64748b;
+  font-weight: 600;
+}
+.fg-month-chart__col.is-active .fg-month-chart__cnt {
+  color: #cbd5e1;
+}
+
+/* Cabeçalho de Agrupamento Mensal na Linha do Tempo */
+.fg-timeline-group {
+  display: grid;
+  gap: 12px;
+}
+.fg-timeline-group__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 16px;
+  border-radius: 10px;
+  background: linear-gradient(90deg, var(--gru-blue) 0%, var(--gru-blue-light) 100%);
+  color: #ffffff;
+  border-left: 4px solid var(--gru-red);
+}
+.fg-timeline-group__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #fbbf24;
+  box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.25);
+}
+.fg-timeline-group__title {
+  margin: 0;
+  font-size: 0.92rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+}
+.fg-timeline-group__sum {
+  font-size: 0.8rem;
+  color: #e2e8f0;
+  font-family: var(--font-mono);
+}
+.fg-timeline-group__sum strong {
+  color: #fbbf24;
+}
+
+/* Grid e Card Ilustrado de Decreto / Diário Ordenado */
+.fg-ordered-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+}
+.fg-ordered-card {
+  background: #ffffff;
+  border: 1px solid var(--fg-border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.03);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.fg-ordered-card:hover {
+  border-color: var(--gru-blue);
+  box-shadow: 0 4px 14px rgba(22, 43, 77, 0.08);
+}
+.fg-ordered-card__top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.fg-ordered-card__num {
+  font-size: 0.98rem;
+  font-weight: 900;
+  color: #09152b;
+  font-family: var(--font-mono);
+}
+.fg-ordered-card__val-box {
+  text-align: right;
+}
+.fg-ordered-card__val-lbl {
+  display: block;
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.fg-ordered-card__val {
+  font-family: var(--font-mono);
+  font-size: 1.08rem;
+  font-weight: 900;
+  color: #047857;
+}
+.fg-ordered-card__bar {
+  height: 6px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  overflow: hidden;
+}
+.fg-ordered-card__bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--gru-blue) 0%, #059669 100%);
+}
+
+/* Diagrama Visual Compacto: De Onde Saiu -> Para Onde Foi */
+.fg-mini-flow {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  align-items: center;
+}
+@media (min-width: 760px) {
+  .fg-mini-flow {
+    grid-template-columns: 1fr auto 1fr;
+  }
+}
+.fg-mini-flow__box {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 9px;
+  font-size: 0.78rem;
+}
+.fg-mini-flow__box--out {
+  background: #fff5f5;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+.fg-mini-flow__box--in {
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  color: #166534;
+}
+.fg-mini-flow__lbl {
+  display: block;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  opacity: 0.85;
+}
+.fg-mini-flow__arrow {
+  display: none;
+  color: #64748b;
+}
+@media (min-width: 760px) {
+  .fg-mini-flow__arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+}
+
+.fg-ordered-card__excerpt {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #334155;
+  line-height: 1.5;
+  background: #f8fafc;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border-left: 3px solid var(--gru-blue);
+}
+.fg-ordered-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-top: 4px;
+}
+
+/* Caixa de Cruzamento de Decretos dentro do Card do Diário Oficial */
+.fg-diario-decrees-box {
+  background: #fffbeb;
+  border: 1px solid #fde68a;
+  border-radius: 9px;
+  padding: 9px 12px;
+  margin-top: 6px;
+}
+.fg-diario-decrees-box__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.74rem;
+  font-weight: 800;
+  color: #92400e;
+  margin-bottom: 6px;
+}
+.fg-diario-decrees-box__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.fg-diario-decree-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 9px;
+  border-radius: 6px;
+  background: #ffffff;
+  border: 1px solid #fcd34d;
+  color: #09152b;
+  font-size: 0.74rem;
+  font-weight: 700;
+  text-decoration: none;
+  font-family: var(--font-mono);
+}
+.fg-diario-decree-chip b {
+  color: #047857;
+}
+.fg-diario-decree-chip:hover {
+  border-color: var(--gru-red);
+  background: #fef2f2;
+}
+
+.fg-caderno-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+@media (max-width: 768px) {
+  .fg-month-chart {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 6px;
+  }
+  .fg-ordered-card__actions .fg-btn {
+    flex: 1 1 100%;
+    justify-content: center;
+  }
+}
+
+
 
