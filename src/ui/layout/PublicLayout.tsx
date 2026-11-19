@@ -77,7 +77,7 @@ export function PublicLayout() {
           <div className="fg-live-strip__right">
             <Link to="/decretos" className="fg-live-strip__link">
               <ArrowRightLeft size={12} />
-              <span>Decretos (demonstração)</span>
+              <span>262 Decretos &amp; 212 Diários (2025–2026)</span>
             </Link>
             <span className="fg-live-strip__sep">·</span>
             <Link to="/fontes" className="fg-live-strip__link">

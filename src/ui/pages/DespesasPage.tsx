@@ -34,7 +34,6 @@ import {
   FileCheck2,
   Filter,
   Search,
-  ShieldCheck,
 } from 'lucide-react';
 import { despesasRepository } from '@/repositories/despesasRepository';
 import { useAsync } from '../hooks/useAsync';
@@ -54,6 +53,10 @@ const MESES_NOMES = [
   { val: 6, label: 'Junho' },
   { val: 7, label: 'Julho' },
   { val: 8, label: 'Agosto' },
+  { val: 9, label: 'Setembro' },
+  { val: 10, label: 'Outubro' },
+  { val: 11, label: 'Novembro' },
+  { val: 12, label: 'Dezembro' },
 ];
 
 /** Atalhos temáticos de auditoria rápida para os maiores contratos municipais */
@@ -168,14 +171,26 @@ export function DespesasPage() {
               liquidados pela Prefeitura, Câmara Municipal e IPREM em {ano}.
             </p>
 
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14 }}>
-              <Link to="/decretos" className="fg-btn-audit-live" style={{ textDecoration: 'none' }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+              <button
+                type="button"
+                onClick={() => atualizarFiltros({ ano: '2026', mes: null })}
+                className={ano === 2026 ? 'fg-btn-audit-live' : 'fg-btn-audit-ghost'}
+                style={{ cursor: 'pointer' }}
+              >
+                <span>Exercício 2026 (R$ 4,28 bi · 24.177 pags)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => atualizarFiltros({ ano: '2025', mes: null })}
+                className={ano === 2025 ? 'fg-btn-audit-live' : 'fg-btn-audit-ghost'}
+                style={{ cursor: 'pointer' }}
+              >
+                <span>Exercício 2025 Completo (R$ 6,34 bi · 38.571 pags)</span>
+              </button>
+              <Link to="/decretos" className="fg-btn-audit-ghost">
                 <ArrowRightLeft size={15} />
-                <span>Ver Decretos Orçamentários (De Onde Saiu → Para Onde Foi)</span>
-              </Link>
-              <Link to="/fontes" className="fg-btn-audit-ghost">
-                <ShieldCheck size={15} />
-                <span>Status das Fontes &amp; Diários Extraídos</span>
+                <span>262 Decretos &amp; 212 Diários Oficiais</span>
               </Link>
             </div>
           </div>
@@ -281,9 +296,10 @@ export function DespesasPage() {
           <select
             id="filtro-ano"
             value={ano}
-            onChange={(e) => atualizarFiltros({ ano: e.target.value })}
+            onChange={(e) => atualizarFiltros({ ano: e.target.value, mes: null })}
           >
-            <option value="2026">2026 (Exercício vigente)</option>
+            <option value="2026">2026 (Jan–Ago · R$ 4,28 bi)</option>
+            <option value="2025">2025 (Ano completo · R$ 6,34 bi)</option>
           </select>
         </div>
 
@@ -295,8 +311,8 @@ export function DespesasPage() {
             value={mesParam ?? ''}
             onChange={(e) => atualizarFiltros({ mes: e.target.value || null })}
           >
-            <option value="">Acumulado no Ano (Jan–Ago)</option>
-            {MESES_NOMES.map((m) => (
+            <option value="">{ano === 2025 ? 'Todos os 12 meses (Jan–Dez)' : 'Acumulado no Ano (Jan–Ago)'}</option>
+            {MESES_NOMES.filter((m) => ano === 2025 || m.val <= 8).map((m) => (
               <option key={m.val} value={m.val}>
                 {m.label}
               </option>

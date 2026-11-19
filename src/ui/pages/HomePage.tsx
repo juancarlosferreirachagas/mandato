@@ -25,7 +25,7 @@ import {
   BookOpen,
   Building2,
   Calendar,
-  AlertTriangle,
+  CheckCircle2,
   FileCheck2,
   Landmark,
   Search,
@@ -49,9 +49,9 @@ const POPULACAO_GUARULHOS = 1291771;
 /**
  * Carrega em paralelo todas as agregações necessárias para a Home via RPCs do Supabase.
  */
-async function carregar() {
-  const todos = await despesasRepository.porMes();
-  const ano = todos.length ? todos[todos.length - 1].exercicio : new Date().getFullYear();
+async function carregar(anoSelecionado: number) {
+  const todos = await despesasRepository.porMes({ ano: anoSelecionado });
+  const ano = anoSelecionado;
   const [resumo, orgaos, areas, top] = await Promise.all([
     despesasRepository.resumo({ ano }),
     despesasRepository.porOrgao({ ano }),
@@ -74,8 +74,9 @@ function KpiSkeleton() {
 export function HomePage() {
   const nav = useNavigate();
   const [q, setQ] = useState('');
+  const [anoHome, setAnoHome] = useState<2026 | 2025>(2026);
   const [areaSelecionada, setAreaSelecionada] = useState<DespesaPorArea | null>(null);
-  const { data, loading, error } = useAsync(carregar, []);
+  const { data, loading, error } = useAsync(() => carregar(anoHome), [anoHome]);
 
   const buscar = (e: React.FormEvent) => {
     e.preventDefault();
@@ -135,21 +136,29 @@ export function HomePage() {
             </form>
 
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
-              <Link to="/decretos" className="fg-btn-audit-live" style={{ textDecoration: 'none' }}>
+              <button
+                type="button"
+                onClick={() => setAnoHome(2026)}
+                className={anoHome === 2026 ? 'fg-btn-audit-live' : 'fg-btn-audit-ghost'}
+                style={{ cursor: 'pointer' }}
+              >
+                <span>Exercício 2026 (R$ 4,28 bi)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setAnoHome(2025)}
+                className={anoHome === 2025 ? 'fg-btn-audit-live' : 'fg-btn-audit-ghost'}
+                style={{ cursor: 'pointer' }}
+              >
+                <span>Exercício 2025 Completo (R$ 6,34 bi)</span>
+              </button>
+              <Link to="/decretos" className="fg-btn-audit-ghost">
                 <ArrowRightLeft size={15} />
-                <span>Decretos Explicados (Origem → Destino)</span>
+                <span>262 Decretos &amp; 212 Diários (PDF)</span>
               </Link>
               <Link to="/financas" className="fg-btn-audit-ghost">
                 <TrendingUp size={15} />
                 <span>Receitas × Gastos</span>
-              </Link>
-              <Link to="/despesas" className="fg-btn-audit-ghost">
-                <Building2 size={15} />
-                <span>3.798 Fornecedores</span>
-              </Link>
-              <Link to="/politicos" className="fg-btn-audit-ghost">
-                <Landmark size={15} />
-                <span>Prefeito &amp; 34 Vereadores</span>
               </Link>
             </div>
           </div>
@@ -211,11 +220,11 @@ export function HomePage() {
               <span className="fg-soon__icon-box">
                 <ArrowRightLeft size={18} />
               </span>
-              <span className="fg-badge fg-badge--amber">Demonstração</span>
+              <span className="fg-badge fg-badge--emerald">262 Decretos · 212 Diários</span>
             </div>
             <div className="fg-soon__title">Decretos &amp; Diários Extraídos</div>
             <p className="fg-soon__desc">
-              Rastreabilidade completa: veja de onde saiu e para onde foi o dinheiro em cada decreto do Diário Oficial.
+              Rastreabilidade completa (2025 e 2026): de onde saiu (Redução R$) e para onde foi (Suplementação R$) com PDF oficial.
             </p>
           </Link>
 
@@ -224,11 +233,11 @@ export function HomePage() {
               <span className="fg-soon__icon-box">
                 <TrendingUp size={18} />
               </span>
-              <span className="fg-badge fg-badge--amber">R$ 5,74 bi</span>
+              <span className="fg-badge fg-badge--amber">R$ 12,55 bi (25–26)</span>
             </div>
-            <div className="fg-soon__title">Receitas × Gastos</div>
+            <div className="fg-soon__title">Receitas × Gastos (2025 &amp; 2026)</div>
             <p className="fg-soon__desc">
-              Entenda de onde vem cada imposto (IPTU, ISS, ICMS, FUNDEB, SUS) e o saldo real do Tesouro Municipal.
+              Entenda de onde vem cada imposto (IPTU, ISS, ICMS, FUNDEB, SUS) em 2025 (R$ 7,24 bi) e 2026 (R$ 5,31 bi).
             </p>
           </Link>
 
@@ -237,11 +246,11 @@ export function HomePage() {
               <span className="fg-soon__icon-box">
                 <Building2 size={18} />
               </span>
-              <span className="fg-badge fg-badge--navy">3.798 Credores</span>
+              <span className="fg-badge fg-badge--navy">62.748 Pagamentos</span>
             </div>
             <div className="fg-soon__title">Ranking de Fornecedores</div>
             <p className="fg-soon__desc">
-              Audite quais hospitais, viações de ônibus, empresas de limpeza e construtoras mais recebem em Guarulhos.
+              Audite quais hospitais, viações de ônibus, empresas de limpeza e construtoras mais receberam em 2025 e 2026.
             </p>
           </Link>
 
@@ -271,18 +280,18 @@ export function HomePage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
                 <span className="fg-badge fg-badge--navy">
                   <BookOpen size={12} />
-                  MODELO · DIÁRIO OFICIAL DE GUARULHOS
+                  IMPRENSA OFICIAL DE GUARULHOS · 212 EDIÇÕES (2025–2026)
                 </span>
-                <span className="fg-badge fg-badge--amber">
-                  <AlertTriangle size={12} />
-                  Dados de demonstração
+                <span className="fg-badge fg-badge--emerald">
+                  <CheckCircle2 size={12} />
+                  262 Decretos Suplementares Extraídos com PDF Oficial
                 </span>
               </div>
               <h2 className="fg-h2">
                 Rastreabilidade de Decretos Orçamentários: De Onde Saiu e Para Onde Foi
               </h2>
               <p className="fg-sub">
-                Exemplos ilustrativos de como cada decreto será explicado. Ainda não foram extraídos do Diário Oficial real:
+                Últimos decretos reais assinados no Diário Oficial de Guarulhos com códigos de Redução R$ e Suplementação R$:
               </p>
             </div>
             <Link to="/decretos" className="fg-btn fg-btn--primary" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>

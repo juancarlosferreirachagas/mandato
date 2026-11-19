@@ -4,7 +4,9 @@ dist
 .env.local
 .env.import
 data/
+TCE-2025/
 TCE-2026/
+scripts/*.json
 *.log
 .supabase
 

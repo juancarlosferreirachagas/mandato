@@ -268,14 +268,26 @@ export function FinancasPage() {
               serviço público ele vai em {periodo}.
             </p>
 
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 14 }}>
-              <Link to="/decretos" className="fg-btn-audit-live" style={{ textDecoration: 'none' }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
+              <button
+                type="button"
+                onClick={() => setParams({ ano: '2026' })}
+                className={ano === 2026 ? 'fg-btn-audit-live' : 'fg-btn-audit-ghost'}
+                style={{ cursor: 'pointer' }}
+              >
+                <span>Exercício 2026 (R$ 5,31 bi rec. × R$ 4,28 bi desp.)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setParams({ ano: '2025' })}
+                className={ano === 2025 ? 'fg-btn-audit-live' : 'fg-btn-audit-ghost'}
+                style={{ cursor: 'pointer' }}
+              >
+                <span>Exercício 2025 Completo (R$ 7,24 bi rec. × R$ 6,34 bi desp.)</span>
+              </button>
+              <Link to="/decretos" className="fg-btn-audit-ghost">
                 <ArrowRightLeft size={15} />
-                <span>Auditar Decretos de Suplementação (De Onde Saiu → Para Onde Foi)</span>
-              </Link>
-              <Link to="/despesas" className="fg-btn-audit-ghost">
-                <Building2 size={15} />
-                <span>Ver Fornecedores Pagos</span>
+                <span>262 Decretos &amp; 212 Diários</span>
               </Link>
             </div>
           </div>

@@ -1,24 +1,20 @@
 /**
  * ============================================================================
- * REPOSITÓRIO DE RECEITAS MUNICIPAIS (TCE-SP AUDESP — GUARULHOS)
+ * REPOSITÓRIO DE RECEITAS MUNICIPAIS (TCE-SP AUDESP — GUARULHOS 2025 & 2026)
  * Projeto: Fiscaliza Guarulhos (IBGE 3518800)
  * ============================================================================
  *
- * ARQUITETURA DE ALTA DISPONIBILIDADE (FAILOVER AUTOMÁTICO):
- * 1. Tenta consultar em tempo real as funções analíticas (RPCs) no Supabase:
- *    - `fg_receitas_resumo`
- *    - `fg_receitas_por_mes`
- *    - `fg_receitas_arvore` (ou `fg_receitas_por_origem`)
- *    - `fg_receitas_por_fonte`
- * 2. Caso o endpoint remoto do Supabase sofra queda de rede (`Failed to fetch`),
- *    pausa de cluster ou ausência de RPC específica, faz failover transparente
- *    para o snapshot oficial pré-computado de `TCE-2026/receitas-guarulhos-2026.csv`
- *    (`SNAPSHOT_TCE_GUARULHOS_2026.receitas`), garantindo zero erro na tela.
+ * ARQUITETURA MULTI-EXERCÍCIO (2025 + 2026) COM FAILOVER AUTOMÁTICO:
+ * 1. Tenta consultar em tempo real as funções analíticas (RPCs) no Supabase.
+ * 2. Faz failover automático para os snapshots oficiais do TCE-SP:
+ *    - Exercício 2026: `SNAPSHOT_TCE_GUARULHOS_2026.receitas` (R$ 5,31 bi · 4.056 lançamentos)
+ *    - Exercício 2025: `SNAPSHOT_TCE_GUARULHOS_2025.receitas` (R$ 7,24 bi · 5.406 lançamentos)
  * ============================================================================
  */
 
 import { db } from '@/database/client';
 import { SNAPSHOT_TCE_GUARULHOS_2026 } from '@/database/contingenciaOficialGuarulhos';
+import { SNAPSHOT_TCE_GUARULHOS_2025 } from '@/database/contingenciaOficialGuarulhos2025';
 
 export interface ResumoReceitas {
   total_arrecadado: number;
@@ -52,11 +48,10 @@ export interface ReceitaFonte {
 
 const num = (v: unknown) => (v === null || v === undefined ? 0 : Number(v));
 
-/**
- * Executa uma RPC no Supabase e retorna `null` em caso de falha de rede
- * (`TypeError: Failed to fetch`) ou função não encontrada, acionando o
- * snapshot oficial local do TCE-SP 2026 sem quebrar a interface.
- */
+function selecionarSnapshotReceitas(ano?: number | null) {
+  return ano === 2025 ? SNAPSHOT_TCE_GUARULHOS_2025.receitas : SNAPSHOT_TCE_GUARULHOS_2026.receitas;
+}
+
 async function rpcSafe<T>(nome: string, args: Record<string, unknown>): Promise<T | null> {
   try {
     const { data, error } = await db().rpc(nome, args);
@@ -68,10 +63,6 @@ async function rpcSafe<T>(nome: string, args: Record<string, unknown>): Promise<
 }
 
 export const receitasRepository = {
-  /**
-   * Resumo consolidado de arrecadação (Corrente, Capital, Intra-Orçamentária).
-   * Suporta filtro opcional por mês utilizando a série mensal oficial.
-   */
   async resumo(ano: number | null, mes: number | null = null): Promise<ResumoReceitas> {
     const rows = await rpcSafe<any[]>('fg_receitas_resumo', { p_ano: ano, p_mes: mes, p_orgao: null });
     if (rows && rows[0] && num(rows[0].total_arrecadado) > 0) {
@@ -86,8 +77,7 @@ export const receitasRepository = {
       };
     }
 
-    // Failover para o Snapshot Oficial TCE-2026 (receitas-guarulhos-2026.csv)
-    const snap = SNAPSHOT_TCE_GUARULHOS_2026.receitas;
+    const snap = selecionarSnapshotReceitas(ano);
     if (mes) {
       const mObj = (snap.porMes as ReceitaMes[]).find((x) => x.mes === mes);
       const fator = mObj && snap.resumo.total_arrecadado > 0 ? mObj.total_liquido / snap.resumo.total_arrecadado : 1;
@@ -103,27 +93,21 @@ export const receitasRepository = {
     return snap.resumo as ResumoReceitas;
   },
 
-  /**
-   * Evolução mensal da receita arrecadada (Janeiro a Agosto de 2026).
-   */
   async porMes(ano: number | null): Promise<ReceitaMes[]> {
     const rows = await rpcSafe<any[]>('fg_receitas_por_mes', { p_ano: ano, p_orgao: null });
     if (rows && rows.length > 0) {
       return rows.map((r) => ({ ...r, total_liquido: num(r.total_liquido), qtd: num(r.qtd) }));
     }
-    return SNAPSHOT_TCE_GUARULHOS_2026.receitas.porMes as ReceitaMes[];
+    return selecionarSnapshotReceitas(ano).porMes as ReceitaMes[];
   },
 
-  /**
-   * Árvore contábil de receitas (Categoria > Subcategoria > Rubrica).
-   */
   async arvore(ano: number | null, mes: number | null = null): Promise<ReceitaLinha[]> {
     const rows = await rpcSafe<any[]>('fg_receitas_arvore', { p_ano: ano, p_mes: mes, p_orgao: null });
     if (rows && rows.length > 0) {
       return rows.map((r) => ({ ...r, total: num(r.total), qtd: num(r.qtd) }));
     }
 
-    const snap = SNAPSHOT_TCE_GUARULHOS_2026.receitas;
+    const snap = selecionarSnapshotReceitas(ano);
     const base = snap.arvore as ReceitaLinha[];
     if (!mes) return base;
 
@@ -135,16 +119,13 @@ export const receitasRepository = {
     }));
   },
 
-  /**
-   * Receitas agrupadas por Fonte de Recurso (01 - Tesouro, 02 - Estaduais, 05 - Federais, etc.).
-   */
   async porFonte(ano: number | null, mes: number | null = null): Promise<ReceitaFonte[]> {
     const rows = await rpcSafe<any[]>('fg_receitas_por_fonte', { p_ano: ano, p_mes: mes });
     if (rows && rows.length > 0) {
       return rows.map((r) => ({ ...r, total: num(r.total), qtd: num(r.qtd) }));
     }
 
-    const snap = SNAPSHOT_TCE_GUARULHOS_2026.receitas;
+    const snap = selecionarSnapshotReceitas(ano);
     const base = snap.porFonte as ReceitaFonte[];
     if (!mes) return base;
 
