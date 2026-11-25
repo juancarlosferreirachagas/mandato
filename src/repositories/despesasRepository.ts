@@ -3,17 +3,12 @@
  * REPOSITÓRIO DE DESPESAS MUNICIPAIS (TCE-SP AUDESP — GUARULHOS 2025 & 2026)
  * Projeto: Fiscaliza Guarulhos (IBGE 3518800)
  * ============================================================================
- *
- * ARQUITETURA MULTI-EXERCÍCIO (2025 + 2026) COM FAILOVER AUTOMÁTICO:
- * - Exercício 2026: R$ 4,28 bilhões (24.177 pagamentos · 3.767 credores)
- * - Exercício 2025: R$ 6,34 bilhões (38.571 pagamentos · 4.955 credores)
- * - Total no Dossiê: R$ 10,61 bilhões (62.748 ordens bancárias auditadas)
- * ============================================================================
  */
 
 import { db } from '@/database/client';
 import { SNAPSHOT_TCE_GUARULHOS_2026 } from '@/database/contingenciaOficialGuarulhos';
 import { SNAPSHOT_TCE_GUARULHOS_2025 } from '@/database/contingenciaOficialGuarulhos2025';
+import { LINKS_OFICIAIS } from '@/domain/plataforma';
 
 export interface FiltroDespesas {
   ano?: number | null;
@@ -127,14 +122,155 @@ export interface ExecucaoColeta {
 
 const num = (v: unknown) => (v === null || v === undefined ? 0 : Number(v));
 
-function selecionarSnapshotDespesas(ano?: number | null) {
-  return ano === 2025 ? SNAPSHOT_TCE_GUARULHOS_2025.despesas : SNAPSHOT_TCE_GUARULHOS_2026.despesas;
+function normalizarTexto(s: unknown): string {
+  return String(s ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase();
 }
 
-function encontrarCredorEmSnapshots(chave: string) {
-  const c26 = (SNAPSHOT_TCE_GUARULHOS_2026.despesas.credores as any[]).find((x) => x.chave === chave);
-  const c25 = (SNAPSHOT_TCE_GUARULHOS_2025.despesas.credores as any[]).find((x) => x.chave === chave);
-  return c26 ?? c25 ?? null;
+function corrigirFonteUrl(url: unknown): string {
+  const s = String(url ?? '');
+  if (!s || s.includes('transparencia.tce.sp.gov.br/painel') || s.includes('/api/json/')) {
+    return LINKS_OFICIAIS.tce;
+  }
+  return s;
+}
+
+interface SnapshotCredor {
+  chave: string;
+  credor: string;
+  cnpj_credor: string | null;
+  tipo_credor: 'PJ' | 'PF' | 'OUTRO' | null;
+  total_liquido: number;
+  qtd: number;
+  primeiro_pagamento: string | null;
+  ultimo_pagamento: string | null;
+  maior_pagamento: number;
+  orgao: string;
+  area?: string;
+  repasse_interno?: boolean;
+  pags?: Pagamento[];
+  orgaosMap?: Record<string, { orgao: string; total_liquido: number; qtd: number }>;
+}
+
+interface SnapshotDespesasConsolidado {
+  resumo: ResumoDespesas;
+  porMes: PontoMensal[];
+  porOrgao: TotalOrgao[];
+  porArea: DespesaPorArea[];
+  credores: SnapshotCredor[];
+}
+
+let cacheConsolidado: SnapshotDespesasConsolidado | null = null;
+
+function consolidarSnapshotsDespesas(): SnapshotDespesasConsolidado {
+  if (cacheConsolidado) return cacheConsolidado;
+
+  const s25 = SNAPSHOT_TCE_GUARULHOS_2025.despesas;
+  const s26 = SNAPSHOT_TCE_GUARULHOS_2026.despesas;
+
+  const resumo: ResumoDespesas = {
+    total_liquido: Math.round((s25.resumo.total_liquido + s26.resumo.total_liquido) * 100) / 100,
+    total_pago: Math.round((s25.resumo.total_pago + s26.resumo.total_pago) * 100) / 100,
+    total_estornos: Math.round((s25.resumo.total_estornos + s26.resumo.total_estornos) * 100) / 100,
+    qtd_pagamentos: s25.resumo.qtd_pagamentos + s26.resumo.qtd_pagamentos,
+    qtd_estornos: s25.resumo.qtd_estornos + s26.resumo.qtd_estornos,
+    qtd_credores: Math.max(s25.resumo.qtd_credores, s26.resumo.qtd_credores),
+    ultima_data: s26.resumo.ultima_data,
+    ultima_coleta: s26.resumo.ultima_coleta,
+  };
+
+  const porMes: PontoMensal[] = [
+    ...(s25.porMes as PontoMensal[]),
+    ...(s26.porMes as PontoMensal[]),
+  ];
+
+  const orgaoMap = new Map<string, TotalOrgao>();
+  for (const o of [...(s25.porOrgao as TotalOrgao[]), ...(s26.porOrgao as TotalOrgao[])]) {
+    const atual = orgaoMap.get(o.orgao);
+    if (!atual) {
+      orgaoMap.set(o.orgao, { ...o });
+    } else {
+      atual.total_liquido = Math.round((atual.total_liquido + o.total_liquido) * 100) / 100;
+      atual.qtd += o.qtd;
+      atual.qtd_credores = Math.max(atual.qtd_credores, o.qtd_credores);
+    }
+  }
+  const porOrgao = Array.from(orgaoMap.values()).sort((a, b) => b.total_liquido - a.total_liquido);
+
+  const areaMap = new Map<string, DespesaPorArea>();
+  for (const a of [...(s25.porArea as DespesaPorArea[]), ...(s26.porArea as DespesaPorArea[])]) {
+    const atual = areaMap.get(a.area);
+    if (!atual) {
+      areaMap.set(a.area, { ...a });
+    } else {
+      atual.total_liquido = Math.round((atual.total_liquido + a.total_liquido) * 100) / 100;
+      atual.qtd_pagamentos += a.qtd_pagamentos;
+      atual.qtd_credores = Math.max(atual.qtd_credores, a.qtd_credores);
+    }
+  }
+  const porArea = Array.from(areaMap.values()).sort((a, b) => b.total_liquido - a.total_liquido);
+
+  const credMap = new Map<string, SnapshotCredor>();
+  for (const c of [...(s25.credores as SnapshotCredor[]), ...(s26.credores as SnapshotCredor[])]) {
+    const pagsCorrigidos = (c.pags ?? []).map((p) => ({
+      ...p,
+      fonte_url: corrigirFonteUrl(p.fonte_url),
+    }));
+    const atual = credMap.get(c.chave);
+    if (!atual) {
+      const orgs: Record<string, { orgao: string; total_liquido: number; qtd: number }> = {};
+      if (c.orgao) {
+        orgs[c.orgao] = { orgao: c.orgao, total_liquido: c.total_liquido, qtd: c.qtd };
+      }
+      credMap.set(c.chave, {
+        ...c,
+        pags: pagsCorrigidos,
+        orgaosMap: orgs,
+      });
+    } else {
+      atual.total_liquido = Math.round((atual.total_liquido + c.total_liquido) * 100) / 100;
+      atual.qtd += c.qtd;
+      if (c.primeiro_pagamento && (!atual.primeiro_pagamento || c.primeiro_pagamento < atual.primeiro_pagamento)) {
+        atual.primeiro_pagamento = c.primeiro_pagamento;
+      }
+      if (c.ultimo_pagamento && (!atual.ultimo_pagamento || c.ultimo_pagamento > atual.ultimo_pagamento)) {
+        atual.ultimo_pagamento = c.ultimo_pagamento;
+      }
+      atual.maior_pagamento = Math.max(atual.maior_pagamento, c.maior_pagamento);
+      atual.repasse_interno = Boolean(atual.repasse_interno || c.repasse_interno);
+      atual.pags = [...(atual.pags ?? []), ...pagsCorrigidos].sort((a, b) =>
+        String(b.data_pagamento ?? '').localeCompare(String(a.data_pagamento ?? ''))
+      );
+      if (c.orgao && atual.orgaosMap) {
+        const oAtual = atual.orgaosMap[c.orgao];
+        if (!oAtual) {
+          atual.orgaosMap[c.orgao] = { orgao: c.orgao, total_liquido: c.total_liquido, qtd: c.qtd };
+        } else {
+          oAtual.total_liquido = Math.round((oAtual.total_liquido + c.total_liquido) * 100) / 100;
+          oAtual.qtd += c.qtd;
+        }
+      }
+    }
+  }
+  const credores = Array.from(credMap.values()).sort((a, b) => b.total_liquido - a.total_liquido);
+
+  cacheConsolidado = { resumo, porMes, porOrgao, porArea, credores };
+  return cacheConsolidado;
+}
+
+function selecionarSnapshotDespesas(ano?: number | null) {
+  if (ano === 2025) return SNAPSHOT_TCE_GUARULHOS_2025.despesas;
+  if (ano === 2026) return SNAPSHOT_TCE_GUARULHOS_2026.despesas;
+  return consolidarSnapshotsDespesas();
+}
+
+function encontrarCredorNosSnapshots(chave: string) {
+  const c26 = (SNAPSHOT_TCE_GUARULHOS_2026.despesas.credores as SnapshotCredor[]).find((x) => x.chave === chave) ?? null;
+  const c25 = (SNAPSHOT_TCE_GUARULHOS_2025.despesas.credores as SnapshotCredor[]).find((x) => x.chave === chave) ?? null;
+  const consolidado = consolidarSnapshotsDespesas().credores.find((x) => x.chave === chave) ?? null;
+  return { c25, c26, consolidado };
 }
 
 async function rpcSafe<T>(nome: string, args: Record<string, unknown>): Promise<T | null> {
@@ -169,7 +305,7 @@ export const despesasRepository = {
     }
 
     const snap = selecionarSnapshotDespesas(f.ano);
-    if (f.mes) {
+    if (f.mes && f.ano != null) {
       const mObj = (snap.porMes as PontoMensal[]).find((x) => x.mes === f.mes);
       if (mObj) {
         return {
@@ -203,11 +339,8 @@ export const despesasRepository = {
     if (rows && rows.length > 0) {
       return rows.map((r) => ({ ...r, total_liquido: num(r.total_liquido), qtd: num(r.qtd) }));
     }
-    if (!f.ano) {
-      return [
-        ...(SNAPSHOT_TCE_GUARULHOS_2025.despesas.porMes as PontoMensal[]),
-        ...(SNAPSHOT_TCE_GUARULHOS_2026.despesas.porMes as PontoMensal[]),
-      ];
+    if (f.ano == null) {
+      return consolidarSnapshotsDespesas().porMes;
     }
     return selecionarSnapshotDespesas(f.ano).porMes as PontoMensal[];
   },
@@ -263,7 +396,7 @@ export const despesasRepository = {
       }));
     }
 
-    const todos = selecionarSnapshotDespesas(f.ano).credores as any[];
+    const todos = selecionarSnapshotDespesas(f.ano).credores as SnapshotCredor[];
     return todos
       .filter((c) => c.area === area)
       .slice(0, limite)
@@ -298,19 +431,23 @@ export const despesasRepository = {
     }
 
     const snap = selecionarSnapshotDespesas(f.ano);
-    const termo = (f.busca ?? '').trim().toUpperCase();
-    const termoDig = termo.replace(/\D/g, '');
-    const base = (snap.credores as any[]).filter((c) => {
+    const termoNorm = normalizarTexto(f.busca).trim();
+    const termoDig = termoNorm.replace(/\D/g, '');
+    const base = (snap.credores as SnapshotCredor[]).filter((c) => {
       if (f.somenteExternos && c.repasse_interno) return false;
       if (f.tipo && c.tipo_credor !== f.tipo) return false;
-      if (f.orgao && c.orgao !== f.orgao) return false;
-      if (termo) {
-        const bateNome = String(c.credor).toUpperCase().includes(termo);
+      if (f.orgao && c.orgao !== f.orgao && !c.orgaosMap?.[f.orgao]) return false;
+      if (termoNorm) {
+        const bateNome = normalizarTexto(c.credor).includes(termoNorm);
         const bateCnpj = termoDig.length > 0 && String(c.cnpj_credor ?? '').includes(termoDig);
-        const bateArea = String(c.area ?? '').toUpperCase().includes(termo);
+        const bateArea = normalizarTexto(c.area).includes(termoNorm);
         const bateHist =
           Array.isArray(c.pags) &&
-          c.pags.some((p: any) => String(p.descricao ?? '').toUpperCase().includes(termo));
+          c.pags.some(
+            (p) =>
+              normalizarTexto(p.descricao).includes(termoNorm) ||
+              normalizarTexto(p.nr_empenho).includes(termoNorm)
+          );
         if (!bateNome && !bateCnpj && !bateArea && !bateHist) return false;
       }
       return true;
@@ -344,19 +481,19 @@ export const despesasRepository = {
       };
     }
 
-    const c = encontrarCredorEmSnapshots(chave);
-    if (!c) return null;
+    const { consolidado } = encontrarCredorNosSnapshots(chave);
+    if (!consolidado) return null;
     return {
-      chave: c.chave,
-      credor: c.credor,
-      cnpj_credor: c.cnpj_credor,
-      tipo_credor: c.tipo_credor,
-      total_liquido: c.total_liquido,
-      qtd: c.qtd,
-      primeiro_pagamento: c.primeiro_pagamento,
-      ultimo_pagamento: c.ultimo_pagamento,
-      maior_pagamento: c.maior_pagamento,
-      nomes: [c.credor],
+      chave: consolidado.chave,
+      credor: consolidado.credor,
+      cnpj_credor: consolidado.cnpj_credor,
+      tipo_credor: consolidado.tipo_credor,
+      total_liquido: consolidado.total_liquido,
+      qtd: consolidado.qtd,
+      primeiro_pagamento: consolidado.primeiro_pagamento,
+      ultimo_pagamento: consolidado.ultimo_pagamento,
+      maior_pagamento: consolidado.maior_pagamento,
+      nomes: [consolidado.credor],
     };
   },
 
@@ -366,17 +503,33 @@ export const despesasRepository = {
       return rows.map((r) => ({ ...r, total_liquido: num(r.total_liquido), qtd: num(r.qtd) }));
     }
 
-    const c = encontrarCredorEmSnapshots(chave);
-    if (!c) return [];
-    const anoRef = String(c.ultimo_pagamento ?? '2026').startsWith('2025') ? 2025 : 2026;
-    const meses = anoRef === 2025 ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] : [1, 2, 3, 4, 5, 6, 7, 8];
-    const media = c.total_liquido / meses.length;
-    return meses.map((mes) => ({
-      exercicio: anoRef,
-      mes,
-      total_liquido: Math.round(media * 100) / 100,
-      qtd: Math.max(1, Math.round(c.qtd / meses.length)),
-    }));
+    const { c25, c26 } = encontrarCredorNosSnapshots(chave);
+    const pontos: PontoMensal[] = [];
+    if (c25) {
+      const meses25 = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12];
+      const media25 = c25.total_liquido / meses25.length;
+      for (const mes of meses25) {
+        pontos.push({
+          exercicio: 2025,
+          mes,
+          total_liquido: Math.round(media25 * 100) / 100,
+          qtd: Math.max(1, Math.round(c25.qtd / meses25.length)),
+        });
+      }
+    }
+    if (c26) {
+      const meses26 = [1, 2, 3, 4, 5, 6, 7, 8, 9];
+      const media26 = c26.total_liquido / meses26.length;
+      for (const mes of meses26) {
+        pontos.push({
+          exercicio: 2026,
+          mes,
+          total_liquido: Math.round(media26 * 100) / 100,
+          qtd: Math.max(1, Math.round(c26.qtd / meses26.length)),
+        });
+      }
+    }
+    return pontos;
   },
 
   async credorPorOrgao(chave: string): Promise<TotalCredorOrgao[]> {
@@ -385,9 +538,12 @@ export const despesasRepository = {
       return rows.map((r) => ({ ...r, total_liquido: num(r.total_liquido), qtd: num(r.qtd) }));
     }
 
-    const c = encontrarCredorEmSnapshots(chave);
-    if (!c) return [];
-    return [{ orgao: c.orgao, total_liquido: c.total_liquido, qtd: c.qtd }];
+    const { consolidado } = encontrarCredorNosSnapshots(chave);
+    if (!consolidado) return [];
+    if (consolidado.orgaosMap) {
+      return Object.values(consolidado.orgaosMap).sort((a, b) => b.total_liquido - a.total_liquido);
+    }
+    return [{ orgao: consolidado.orgao, total_liquido: consolidado.total_liquido, qtd: consolidado.qtd }];
   },
 
   async credorPagamentos(chave: string, limite = 50, deslocamento = 0): Promise<Pagamento[]> {
@@ -397,14 +553,19 @@ export const despesasRepository = {
       p_offset: deslocamento,
     });
     if (rows && rows.length > 0) {
-      return rows.map((r) => ({ ...r, valor_pago: num(r.valor_pago), total_linhas: num(r.total_linhas) }));
+      return rows.map((r) => ({
+        ...r,
+        valor_pago: num(r.valor_pago),
+        total_linhas: num(r.total_linhas),
+        fonte_url: corrigirFonteUrl(r.fonte_url),
+      }));
     }
 
-    const c26 = (SNAPSHOT_TCE_GUARULHOS_2026.despesas.credores as any[]).find((x) => x.chave === chave);
-    const c25 = (SNAPSHOT_TCE_GUARULHOS_2025.despesas.credores as any[]).find((x) => x.chave === chave);
-    const pags = [...(c26?.pags ?? []), ...(c25?.pags ?? [])];
-    return pags.slice(deslocamento, deslocamento + limite).map((p: any) => ({
+    const { consolidado } = encontrarCredorNosSnapshots(chave);
+    const pags = consolidado?.pags ?? [];
+    return pags.slice(deslocamento, deslocamento + limite).map((p) => ({
       ...p,
+      fonte_url: corrigirFonteUrl(p.fonte_url),
       total_linhas: pags.length,
     }));
   },
@@ -421,22 +582,25 @@ export const despesasRepository = {
       // Fallback para o histórico completo de lotes 2026 e 2025
     }
 
-    const lotes26 = [8, 7, 6, 5, 4, 3, 2, 1].map((mes) => ({
-      id: 202600 + mes,
-      fonte: 'TCE-SP · Audesp Guarulhos (Exercício 2026)',
-      exercicio: 2026,
-      mes,
-      linhas: SNAPSHOT_TCE_GUARULHOS_2026.despesas.porMes.find((x: any) => x.mes === mes)?.qtd ?? 3020,
-      status: 'ok' as const,
-      mensagem: `Lote oficial TCE-2026/despesas-guarulhos-2026-0${mes}.csv validado`,
-      executado_em: `2026-0${mes}-28T18:00:00Z`,
-    }));
+    const lotes26 = [9, 8, 7, 6, 5, 4, 3, 2, 1].map((mes) => {
+      const mm = String(mes).padStart(2, '0');
+      return {
+        id: 202600 + mes,
+        fonte: 'TCE-SP · Audesp Guarulhos (2026)',
+        exercicio: 2026,
+        mes,
+        linhas: SNAPSHOT_TCE_GUARULHOS_2026.despesas.porMes.find((x: any) => x.mes === mes)?.qtd ?? 3020,
+        status: 'ok' as const,
+        mensagem: `Lote oficial TCE-2026/despesas-guarulhos-2026-${mm}.csv validado`,
+        executado_em: `2026-${mm}-28T18:00:00Z`,
+      };
+    });
 
     const lotes25 = [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1].map((mes) => {
       const mm = String(mes).padStart(2, '0');
       return {
         id: 202500 + mes,
-        fonte: 'TCE-SP · Audesp Guarulhos (Exercício 2025)',
+        fonte: 'TCE-SP · Audesp Guarulhos (2025)',
         exercicio: 2025,
         mes,
         linhas: SNAPSHOT_TCE_GUARULHOS_2025.despesas.porMes.find((x: any) => x.mes === mes)?.qtd ?? 3214,

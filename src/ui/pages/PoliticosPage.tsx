@@ -2,11 +2,12 @@ import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Users, Building2, User } from 'lucide-react';
 import { pessoaRepository } from '@/repositories/pessoaRepository';
-import { isSupabaseConfigured } from '@/database/client';
 import { rotuloSituacao } from '@/domain/rules';
 import { useAsync } from '../hooks/useAsync';
 import { EmptyState, ErrorBox, Loading } from '../components/common';
 import { PartyBadge } from '../components/PartyBadge';
+import { PLATAFORMA } from '@/domain/plataforma';
+import { nomeLegivel } from '../format';
 
 const CARGOS = [
   { codigo: 'vereador', label: 'Vereadores', icone: <User size={18} />, ajuda: 'Os 34 vereadores da 19ª Legislatura (2025–2028) da Câmara Municipal de Guarulhos. Votam leis municipais, aprovam o orçamento e fiscalizam os gastos da Prefeitura.' },
@@ -46,11 +47,8 @@ export function PoliticosPage() {
   const [q, setQ] = useState('');
   const [partidoFiltro, setPartidoFiltro] = useState('TODOS');
 
-  // Buscar todos os eleitos para extrair a lista global de partidos
-  const resTodos = useAsync(
-    () => (isSupabaseConfigured ? pessoaRepository.listarEleitos('todos', 'GRU') : Promise.resolve([])),
-    [],
-  );
+  // Buscar todos os eleitos para extrair a lista global de partidos (com failover local automático)
+  const resTodos = useAsync(() => pessoaRepository.listarEleitos('todos', 'GRU'), []);
 
   const todosEleitos = resTodos.data ?? [];
 
@@ -86,10 +84,7 @@ export function PoliticosPage() {
 
   // Busca do cargo selecionado
   const resCargo = useAsync(
-    () => {
-      if (!isSupabaseConfigured) return Promise.resolve([]);
-      return pessoaRepository.listarEleitos(cargoAtual.codigo, 'GRU');
-    },
+    () => pessoaRepository.listarEleitos(cargoAtual.codigo, 'GRU'),
     [cargoAtual.codigo],
   );
 
@@ -111,37 +106,42 @@ export function PoliticosPage() {
           <div>
             <span className="fg-hero__eyebrow">
               <span className="fg-hero__dot" />
-              CRACHÁ CÍVICO OFICIAL · TSE & CÂMARA MUNICIPAL
+              Quem nos representa · dados do TSE e da Câmara
             </span>
             <h1 className="fg-hero__title" style={{ marginTop: 8, marginBottom: 6 }}>
-              Prefeito, Vice & <span>34 Vereadores</span> de Guarulhos
+              Prefeito, vice e <span>{PLATAFORMA.vereadores} vereadores</span> de Guarulhos
             </h1>
             <p className="fg-hero__lead">
-              Toque no crachá de qualquer representante para ver biografia completa, votação oficial no TSE, comissões
-              e todos os projetos de lei, requerimentos de fiscalização e pedidos de bairro.
+              Toque em um nome para ver a biografia, a votação que recebeu, as comissões e os projetos que apresentou.
             </p>
           </div>
 
           <div className="fg-hero-kpis">
             <div className="fg-hero-kpi">
               <div className="fg-hero-kpi__lbl">Câmara Municipal</div>
-              <div className="fg-hero-kpi__val fg-hero-kpi__val--amber">34</div>
+              <div className="fg-hero-kpi__val fg-hero-kpi__val--amber">
+                {contasPorCargo['vereador'] || PLATAFORMA.vereadores}
+              </div>
               <div className="fg-hero-kpi__sub">Vereadores em exercício</div>
             </div>
             <div className="fg-hero-kpi">
-              <div className="fg-hero-kpi__lbl">Poder Executivo</div>
-              <div className="fg-hero-kpi__val fg-hero-kpi__val--emerald">2</div>
-              <div className="fg-hero-kpi__sub">Prefeito & Vice-Prefeito</div>
+              <div className="fg-hero-kpi__lbl">Prefeitura</div>
+              <div className="fg-hero-kpi__val fg-hero-kpi__val--emerald">
+                {(contasPorCargo['prefeito'] || 0) + (contasPorCargo['vice_prefeito'] || 0) || 2}
+              </div>
+              <div className="fg-hero-kpi__sub">Prefeito e vice-prefeito</div>
             </div>
             <div className="fg-hero-kpi">
-              <div className="fg-hero-kpi__lbl">Proposições</div>
-              <div className="fg-hero-kpi__val fg-hero-kpi__val--sky">334</div>
-              <div className="fg-hero-kpi__sub">Projetos e fiscalizações</div>
+              <div className="fg-hero-kpi__lbl">Mandatos ativos</div>
+              <div className="fg-hero-kpi__val fg-hero-kpi__val--sky">
+                {todosEleitos.length || PLATAFORMA.vereadores + 2}
+              </div>
+              <div className="fg-hero-kpi__sub">Prefeitura e Câmara</div>
             </div>
             <div className="fg-hero-kpi">
               <div className="fg-hero-kpi__lbl">Partidos na Casa</div>
               <div className="fg-hero-kpi__val">{partidosDisponiveis.length || 16}</div>
-              <div className="fg-hero-kpi__sub">19ª Legislatura (25–28)</div>
+              <div className="fg-hero-kpi__sub">Legislatura 2025–2028</div>
             </div>
           </div>
         </div>
@@ -158,7 +158,7 @@ export function PoliticosPage() {
           gap: 10,
         }}
       >
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+        <div className="fg-politicos-toolbar">
           <div className="fg-pills" role="tablist" aria-label="Selecione o cargo">
             {cargosDisponiveis.map((c) => {
               const ativo = c.codigo === cargoAtual.codigo;
@@ -191,22 +191,20 @@ export function PoliticosPage() {
             })}
           </div>
 
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', flex: '1 1 320px', justifyContent: 'flex-end' }}>
+          <div className="fg-politicos-controls">
             <input
               id="filtro-busca"
               className="fg-input"
               type="search"
-              placeholder="🔍 Buscar vereador, prefeito ou nome civil..."
+              placeholder="Buscar por nome…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              style={{ flex: '1 1 200px', maxWidth: 340 }}
             />
             <select
               id="filtro-partido"
               className="fg-select"
               value={partidoFiltro}
               onChange={(e) => setPartidoFiltro(e.target.value)}
-              style={{ flex: '0 1 190px' }}
             >
               <option value="TODOS">Todos os partidos ({partidosDisponiveis.length})</option>
               {partidosDisponiveis.map((p) => (
@@ -219,7 +217,7 @@ export function PoliticosPage() {
         </div>
 
         <div style={{ fontSize: '0.8rem', color: '#475569', background: '#f8fafc', padding: '7px 10px', borderRadius: 8 }}>
-          <strong style={{ color: '#0f172a' }}>💡 O que faz ({cargoAtual.label}):</strong> {cargoAtual.ajuda}
+          <strong style={{ color: '#0f172a' }}>O que faz ({cargoAtual.label}):</strong> {cargoAtual.ajuda}
         </div>
       </div>
 
@@ -236,45 +234,49 @@ export function PoliticosPage() {
 
       {/* Grade de Cards com Fotos de Alta Resolução */}
       <div className="politicos-grid">
-        {dadosExibicao.map((e) => (
-          <Link key={e.mandatoId} to={`/politicos/${e.pessoaId}`} className="politico-card">
-            <div className="politico-card__header">
-              <CardFoto nome={e.nome} fotoUrl={e.fotoUrl} />
-              <div className="politico-card__status-badge">
-                <span className="politico-card__status-dot"></span>
-                <span>{e.condicao === 'suplente_exercicio' ? 'Suplente em exercício' : rotuloSituacao(e.situacao)}</span>
-              </div>
-            </div>
-
-            <div className="politico-card__body">
-              <div className="politico-card__party-row" style={{ flexWrap: 'wrap', gap: 6 }}>
-                <PartyBadge sigla={e.partido} />
-                <span className="cargo-tag">{e.cargoNome ?? cargoAtual.label.replace(/s$/, '')}</span>
-                {e.mesaDiretora && (
-                  <span className="cargo-tag" style={{ background: '#eff6ff', color: '#1d4ed8', fontWeight: 700 }}>
-                    {e.mesaDiretora}
-                  </span>
-                )}
-              </div>
-
-              <h2 className="politico-card__name">{e.nome}</h2>
-              {e.nomeCivil && e.nomeCivil.toLowerCase() !== e.nome.toLowerCase() && (
-                <div className="politico-card__civil-name" title={e.nomeCivil}>
-                  Nome civil: {e.nomeCivil}
+        {dadosExibicao.map((e) => {
+          const nomeFormatado = nomeLegivel(e.nome.replace(/\s+/g, ' '));
+          const nomeCivilFormatado = e.nomeCivil ? nomeLegivel(e.nomeCivil.replace(/\s+/g, ' ')) : '';
+          return (
+            <Link key={e.mandatoId} to={`/politicos/${e.pessoaId}`} className="politico-card">
+              <div className="politico-card__header">
+                <CardFoto nome={nomeFormatado} fotoUrl={e.fotoUrl} />
+                <div className="politico-card__status-badge">
+                  <span className="politico-card__status-dot"></span>
+                  <span>{e.condicao === 'suplente_exercicio' ? 'Suplente em exercício' : rotuloSituacao(e.situacao)}</span>
                 </div>
-              )}
-
-              <div className="politico-card__footer">
-                <span className="muted">
-                  {e.votos != null && e.votos > 0
-                    ? `${e.votos.toLocaleString('pt-BR')} votos`
-                    : rotuloSituacao(e.situacao)}
-                </span>
-                <span className="politico-card__action">Ver perfil →</span>
               </div>
-            </div>
-          </Link>
-        ))}
+
+              <div className="politico-card__body">
+                <div className="politico-card__party-row" style={{ flexWrap: 'wrap', gap: 6 }}>
+                  <PartyBadge sigla={e.partido} />
+                  <span className="cargo-tag">{e.cargoNome ?? cargoAtual.label.replace(/s$/, '')}</span>
+                  {e.mesaDiretora && (
+                    <span className="cargo-tag" style={{ background: '#eff6ff', color: '#1d4ed8', fontWeight: 700 }}>
+                      {e.mesaDiretora}
+                    </span>
+                  )}
+                </div>
+
+                <h2 className="politico-card__name">{nomeFormatado}</h2>
+                {nomeCivilFormatado && nomeCivilFormatado.toLowerCase() !== nomeFormatado.toLowerCase() && (
+                  <div className="politico-card__civil-name" title={nomeCivilFormatado}>
+                    Nome civil: {nomeCivilFormatado}
+                  </div>
+                )}
+
+                <div className="politico-card__footer">
+                  <span className="muted">
+                    {e.votos != null && e.votos > 0
+                      ? `${e.votos.toLocaleString('pt-BR')} votos`
+                      : rotuloSituacao(e.situacao)}
+                  </span>
+                  <span className="politico-card__action">Ver perfil →</span>
+                </div>
+              </div>
+            </Link>
+          );
+        })}
       </div>
 
       {dadosExibicao.length > 0 && (

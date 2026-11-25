@@ -1,4 +1,6 @@
 import { db } from '@/database/client';
+import { ELEITOS_GUARULHOS_TSE_2024 } from '@/database/contingenciaPoliticosGuarulhos';
+import { ATOS_LEGISLATIVOS_RECENTES, LEIS_MUNICIPAIS_SANCIONADAS_REAIS } from '@/domain/diariosCatalogoReal';
 
 /**
  * Consultas das abas do perfil. Sempre filtram por pessoa via mandato/pessoa_id.
@@ -24,6 +26,95 @@ async function safeQuery<T>(fn: () => PromiseLike<{ data: T[] | null; error: unk
   }
 }
 
+function semAcento(s: string): string {
+  return (s || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function criarPadroesAutoria(eleito: any): RegExp[] {
+  if (eleito.cargoCodigo === 'prefeito') {
+    return [/poder executivo/i];
+  }
+  if (eleito.cargoCodigo !== 'vereador') {
+    return [];
+  }
+
+  const nomeUrna = semAcento(eleito.nome)
+    .replace(/^(delegado|dr\.?|pr\.?|prof\.?|pastor)\s+/i, '')
+    .trim();
+  const partesCivil = semAcento(eleito.nomeCivil).split(' ').filter((p) => p.length > 2);
+  const candidatos = new Set<string>();
+
+  if (nomeUrna.length >= 4) candidatos.add(nomeUrna);
+  // Trata casos como "daniel alves o capivara" -> "daniel alves"
+  if (nomeUrna.includes(' o ')) {
+    const base = nomeUrna.split(' o ')[0].trim();
+    if (base.length >= 5) candidatos.add(base);
+  }
+  if (partesCivil.length >= 2) {
+    candidatos.add(`${partesCivil[0]} ${partesCivil[1]}`);
+    candidatos.add(`${partesCivil[0]} ${partesCivil[partesCivil.length - 1]}`);
+  }
+
+  return [...candidatos].map((termo) => {
+    const esc = termo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b${esc}\\b`, 'i');
+  });
+}
+
+/**
+ * Cruza o representante municipal com as Leis Sancionadas no DOM-GRU (2025–2026)
+ * e com as proposições recentes protocoladas na Câmara Municipal de Guarulhos.
+ */
+export function obterAtosMunicipaisDoRepresentante(pessoaId: string): LinhaAba[] {
+  const eleito = (ELEITOS_GUARULHOS_TSE_2024 as any[]).find((e) => e.pessoaId === pessoaId);
+  if (!eleito) return [];
+
+  const padroes = criarPadroesAutoria(eleito);
+  if (padroes.length === 0) return [];
+
+  const resultados: LinhaAba[] = [];
+
+  for (const lei of LEIS_MUNICIPAIS_SANCIONADAS_REAIS) {
+    const autNorm = semAcento(lei.autoria);
+    if (padroes.some((re) => re.test(autNorm))) {
+      resultados.push({
+        id: `lei-mun-${lei.numero}`,
+        titulo: `Projeto de Lei aprovado — Lei Municipal nº ${lei.numeroFmt} (${lei.dataBr})`,
+        subtitulo: `${lei.ementa} (${lei.autoria})`,
+        data: lei.dataIso,
+        badge: `Lei sancionada · DOM #${lei.codigoDom}`,
+        fonteId: null,
+        urlExterna: lei.pdfUrl,
+      });
+    }
+  }
+
+  if (eleito.cargoCodigo === 'vereador') {
+    for (let i = 0; i < ATOS_LEGISLATIVOS_RECENTES.length; i++) {
+      const ato = ATOS_LEGISLATIVOS_RECENTES[i];
+      const resNorm = semAcento(`${ato.titulo} ${ato.resumo}`);
+      if (padroes.some((re) => re.test(resNorm))) {
+        resultados.push({
+          id: `ato-cmg-${ato.protocolo ?? i}`,
+          titulo: `${ato.titulo} (${ato.dataBr})`,
+          subtitulo: ato.resumo,
+          data: ato.dataIso,
+          badge: `Protocolado na Câmara · Prot. ${ato.protocolo ?? 'CMG'}`,
+          fonteId: null,
+          urlExterna: ato.url,
+        });
+      }
+    }
+  }
+
+  return resultados;
+}
+
 export const abasRepository = {
   async propostas(pessoaId: string): Promise<LinhaAba[]> {
     const rows = (await safeQuery(() =>
@@ -32,15 +123,18 @@ export const abasRepository = {
         .select('id, papel, fonte_id, proposta:propostas(tipo,numero,ano,ementa,situacao,data_apresentacao,id_externo)')
         .eq('pessoa_id', pessoaId),
     )) as any[];
-    return rows.map((r) => ({
-      id: r.id,
-      titulo: `${r.proposta.tipo} ${r.proposta.numero ?? ''}/${r.proposta.ano ?? ''}`,
-      subtitulo: r.proposta.ementa,
-      data: r.proposta.data_apresentacao,
-      badge: `${r.papel} · ${r.proposta.situacao ?? 'sem situação'}`,
-      fonteId: r.fonte_id,
-      urlExterna: r.proposta.id_externo?.startsWith('http') ? r.proposta.id_externo : null,
-    }));
+    if (rows.length > 0) {
+      return rows.map((r) => ({
+        id: r.id,
+        titulo: `${r.proposta.tipo} ${r.proposta.numero ?? ''}/${r.proposta.ano ?? ''}`,
+        subtitulo: r.proposta.ementa,
+        data: r.proposta.data_apresentacao,
+        badge: `${r.papel} · ${r.proposta.situacao ?? 'sem situação'}`,
+        fonteId: r.fonte_id,
+        urlExterna: r.proposta.id_externo?.startsWith('http') ? r.proposta.id_externo : null,
+      }));
+    }
+    return obterAtosMunicipaisDoRepresentante(pessoaId);
   },
 
   async votacoes(pessoaId: string): Promise<LinhaAba[]> {

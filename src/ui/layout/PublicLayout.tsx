@@ -1,271 +1,343 @@
 /**
  * ============================================================================
- * LAYOUT PÚBLICO INSTITUCIONAL — FISCALIZA GUARULHOS
- * Projeto: Fiscaliza Guarulhos (IBGE 3518800)
+ * LAYOUT PÚBLICO — FISCALIZA GUARULHOS
  * ============================================================================
  *
- * DIRETRIZES DE DESIGN SYSTEM (docs/03-DESIGN-SYSTEM-GUARULHOS.md):
- * - Paleta oficial da Bandeira de Guarulhos: Azul Institucional (#162b4d),
- *   Vermelho Cívico (#c5221f) e Dourado Heráldico (#d4a017).
- * - Zero emojis soltos na navegação: uso exclusivo de ícones vetoriais
- *   `lucide-react` para máxima sobriedade e padrão corporativo de auditoria.
- * - Faixa superior de telemetria em tempo real indicando o status das fontes
- *   (TCE-SP Audesp, Diário Oficial DOM-GRU, Câmara e TSE).
+ * - Computador: cabeçalho fixo com menu horizontal.
+ * - Celular/tablet: botão de menu abre uma gaveta lateral (com fundo escurecido,
+ *   fecha com Esc, toque fora ou ao trocar de página) + barra inferior de
+ *   acesso rápido, no estilo de aplicativo.
+ * - Todos os links vêm de `navigation.ts` e `plataforma.ts` (fonte única).
  * ============================================================================
  */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 import {
   Activity,
   ArrowRightLeft,
   Building2,
   Database,
-  Landmark,
+  ExternalLink,
   LayoutDashboard,
   Menu,
+  Search,
   ShieldCheck,
   TrendingUp,
   Users,
   X,
 } from 'lucide-react';
-import { SECOES, type Secao } from '../navigation';
+import {
+  SECOES,
+  SECOES_BARRA_INFERIOR,
+  rotaDaSecao,
+  secaoAtiva,
+  type IconeSecaoId,
+} from '../navigation';
 import { StatusBanco } from '../components/StatusFontes';
 import { isSupabaseConfigured } from '@/database/client';
+import {
+  LINKS_OFICIAIS,
+  PLATAFORMA,
+  QTD_DECRETOS,
+  QTD_DIARIOS,
+  QTD_DIARIOS_EXECUTIVO,
+  QTD_DIARIOS_LEGISLATIVO,
+} from '@/domain/plataforma';
 
-/**
- * Renderiza o ícone vetorial Lucide correspondente a cada seção da plataforma.
- */
-function renderIconeSecao(id: Secao['iconeId'], size = 15) {
+function IconeSecao({ id, size = 16 }: { id: IconeSecaoId; size?: number }) {
   switch (id) {
     case 'home':
-      return <LayoutDashboard size={size} />;
+      return <LayoutDashboard size={size} aria-hidden />;
     case 'financas':
-      return <TrendingUp size={size} />;
+      return <TrendingUp size={size} aria-hidden />;
     case 'despesas':
-      return <Building2 size={size} />;
+      return <Building2 size={size} aria-hidden />;
     case 'decretos':
-      return <ArrowRightLeft size={size} />;
+      return <ArrowRightLeft size={size} aria-hidden />;
     case 'politicos':
-      return <Landmark size={size} />;
+      return <Users size={size} aria-hidden />;
     case 'fontes':
-      return <Database size={size} />;
+      return <Database size={size} aria-hidden />;
     case 'privacidade':
-      return <ShieldCheck size={size} />;
+      return <ShieldCheck size={size} aria-hidden />;
   }
+}
+
+/** Volta ao topo a cada troca de página (o React Router não faz isso sozinho). */
+function RolarParaOTopo() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [pathname]);
+  return null;
+}
+
+function Marca({ onClick }: { onClick?: () => void }) {
+  return (
+    <Link to="/" className="brand" onClick={onClick} aria-label="Fiscaliza Guarulhos — página inicial">
+      <img
+        src="/bandeira-guarulhos.png"
+        alt=""
+        className="brand__flag"
+        width="36"
+        height="24"
+      />
+      <span className="brand__name">
+        Fiscaliza <b>Guarulhos</b>
+      </span>
+    </Link>
+  );
 }
 
 export function PublicLayout() {
   const [menuAberto, setMenuAberto] = useState(false);
-  const location = useLocation();
+  const { pathname } = useLocation();
+  const botaoMenuRef = useRef<HTMLButtonElement>(null);
+  const botaoFecharRef = useRef<HTMLButtonElement>(null);
 
-  // Fecha o drawer mobile automaticamente ao navegar para uma nova rota
   const fecharMenu = () => setMenuAberto(false);
+
+  // Fecha a gaveta ao navegar
+  useEffect(() => {
+    setMenuAberto(false);
+  }, [pathname]);
+
+  // Gaveta aberta: trava a rolagem do fundo, aceita Esc e devolve o foco ao fechar
+  useEffect(() => {
+    if (!menuAberto) return;
+    document.body.classList.add('fg-lock');
+    botaoFecharRef.current?.focus();
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMenuAberto(false);
+    };
+    window.addEventListener('keydown', aoTeclar);
+    const botaoMenu = botaoMenuRef.current;
+    return () => {
+      document.body.classList.remove('fg-lock');
+      window.removeEventListener('keydown', aoTeclar);
+      botaoMenu?.focus({ preventScroll: true });
+    };
+  }, [menuAberto]);
+
+  // Se a janela crescer para o layout de computador, a gaveta não deve ficar "presa" aberta
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1080px)');
+    const aoMudar = () => mq.matches && setMenuAberto(false);
+    mq.addEventListener('change', aoMudar);
+    return () => mq.removeEventListener('change', aoMudar);
+  }, []);
+
+  const secoesBarra = SECOES.filter((s) => SECOES_BARRA_INFERIOR.includes(s.iconeId));
 
   return (
     <div className="shell">
-      {/* ====================================================================
-          BARRA DE TELEMETRIA E STATUS DE AUDITORIA EM TEMPO REAL
-          ==================================================================== */}
-      <div className="fg-live-strip" role="region" aria-label="Status do banco de dados">
+      <RolarParaOTopo />
+      <a href="#conteudo" className="fg-skip">
+        Pular para o conteúdo
+      </a>
+
+      {/* Faixa de status: mostra que os dados estão carregando de fontes oficiais */}
+      <div className="fg-live-strip" role="region" aria-label="Status dos dados">
         <div className="container fg-live-strip__inner">
           <div className="fg-live-strip__left">
             <StatusBanco compacto />
-            <span className="fg-live-strip__status">Fontes: TCE-SP Audesp · Câmara · TSE</span>
+            <span className="fg-live-strip__sources">Dados oficiais: TCE-SP · Diário Oficial · Câmara · TSE</span>
           </div>
-
           <div className="fg-live-strip__right">
-            <Link to="/decretos" className="fg-live-strip__link">
-              <ArrowRightLeft size={12} />
-              <span>262 Decretos &amp; 212 Diários (2025–2026)</span>
+            <Link to="/decretos" className="fg-live-strip__link fg-live-strip__link--wide">
+              <ArrowRightLeft size={12} aria-hidden />
+              <span>
+                {QTD_DECRETOS} decretos · {QTD_DIARIOS} diários
+              </span>
             </Link>
-            <span className="fg-live-strip__sep">·</span>
             <Link to="/fontes" className="fg-live-strip__link">
-              <Activity size={12} />
-              <span>Status das fontes</span>
+              <Activity size={12} aria-hidden />
+              <span>Ver fontes</span>
             </Link>
           </div>
         </div>
       </div>
 
-      {/* ====================================================================
-          CABEÇALHO PRINCIPAL (TOPBAR COM IDENTIDADE DE GUARULHOS)
-          ==================================================================== */}
+      {/* Cabeçalho */}
       <header className="topbar">
         <div className="container topbar__inner">
-          <Link to="/" className="brand" onClick={fecharMenu} aria-label="Fiscaliza Guarulhos — Página inicial">
-            <img
-              src="/bandeira-guarulhos.png"
-              alt="Bandeira Oficial de Guarulhos"
-              className="brand__flag"
-              width="36"
-              height="24"
-            />
-            <span className="brand__name">
-              FISCALIZA <b>GUARULHOS</b>
-            </span>
-            <span className="brand__tag">GRU</span>
-          </Link>
+          <Marca onClick={fecharMenu} />
 
-          {/* Botão Menu Mobile */}
-          <button
-            type="button"
-            className="fg-mobile-toggle"
-            aria-label={menuAberto ? 'Fechar menu' : 'Abrir menu de navegação'}
-            aria-expanded={menuAberto}
-            onClick={() => setMenuAberto(!menuAberto)}
-          >
-            {menuAberto ? <X size={20} color="#ffffff" /> : <Menu size={20} color="#ffffff" />}
-          </button>
+          <nav className="nav fg-nav-desktop" aria-label="Navegação principal">
+            {SECOES.map((s) => (
+              <NavLink
+                key={s.path}
+                to={rotaDaSecao(s)}
+                end={s.path === ''}
+                className={({ isActive }) => (isActive ? 'nav__link is-active' : 'nav__link')}
+              >
+                <span className="nav__link-icon">
+                  <IconeSecao id={s.iconeId} size={15} />
+                </span>
+                <span>{s.label}</span>
+              </NavLink>
+            ))}
+          </nav>
 
-          {/* Navegação Desktop com Ícones Vetoriais Lucide */}
-          <div className="nav-wrapper fg-nav-desktop">
-            <nav className="nav" aria-label="Navegação Principal">
-              {SECOES.map((s) => (
-                <NavLink
-                  key={s.path}
-                  to={`/${s.path}`}
-                  end={s.path === ''}
-                  className={({ isActive }) => (isActive ? 'nav__link is-active' : 'nav__link')}
-                >
-                  <span className="nav__link-icon">{renderIconeSecao(s.iconeId, 14)}</span>
-                  <span>{s.label}</span>
-                </NavLink>
-              ))}
-            </nav>
+          <div className="topbar__actions">
+            <Link to="/despesas" className="topbar__icon-btn" aria-label="Buscar empresa ou fornecedor">
+              <Search size={19} aria-hidden />
+            </Link>
+            <button
+              ref={botaoMenuRef}
+              type="button"
+              className="topbar__icon-btn fg-mobile-toggle"
+              aria-label="Abrir menu"
+              aria-expanded={menuAberto}
+              aria-controls="menu-lateral"
+              onClick={() => setMenuAberto(true)}
+            >
+              <Menu size={21} aria-hidden />
+            </button>
           </div>
         </div>
-
-        {/* Menu Drawer Mobile */}
-        {menuAberto && (
-          <div className="fg-mobile-menu" role="dialog" aria-label="Menu móvel">
-            <nav className="fg-mobile-nav">
-              {SECOES.map((s) => {
-                const isActive =
-                  s.path === '' ? location.pathname === '/' : location.pathname.startsWith(`/${s.path}`);
-                return (
-                  <Link
-                    key={s.path}
-                    to={`/${s.path}`}
-                    onClick={fecharMenu}
-                    className={`fg-mobile-link ${isActive ? 'is-active' : ''}`}
-                  >
-                    <span className="fg-mobile-icon">{renderIconeSecao(s.iconeId, 18)}</span>
-                    <div>
-                      <div className="fg-mobile-title">{s.label}</div>
-                      <div className="fg-mobile-desc">{s.descricao}</div>
-                    </div>
-                  </Link>
-                );
-              })}
-            </nav>
-          </div>
-        )}
       </header>
+
+      {/* Gaveta lateral (celular e tablet) */}
+      <div className={`fg-drawer${menuAberto ? ' is-open' : ''}`}>
+        <button type="button" className="fg-drawer__backdrop" tabIndex={-1} aria-label="Fechar menu" onClick={fecharMenu} />
+        <aside id="menu-lateral" className="fg-drawer__panel" role="dialog" aria-modal="true" aria-label="Menu de navegação">
+          <div className="fg-drawer__head">
+            <Marca onClick={fecharMenu} />
+            <button ref={botaoFecharRef} type="button" className="topbar__icon-btn" aria-label="Fechar menu" onClick={fecharMenu}>
+              <X size={21} aria-hidden />
+            </button>
+          </div>
+
+          <nav className="fg-drawer__nav" aria-label="Todas as seções">
+            {SECOES.map((s) => (
+              <Link
+                key={s.path}
+                to={rotaDaSecao(s)}
+                onClick={fecharMenu}
+                className={`fg-drawer__link${secaoAtiva(s, pathname) ? ' is-active' : ''}`}
+                aria-current={secaoAtiva(s, pathname) ? 'page' : undefined}
+              >
+                <span className="fg-drawer__icon">
+                  <IconeSecao id={s.iconeId} size={19} />
+                </span>
+                <span className="fg-drawer__text">
+                  <span className="fg-drawer__title">{s.label}</span>
+                  <span className="fg-drawer__desc">{s.descricao}</span>
+                </span>
+              </Link>
+            ))}
+          </nav>
+
+          <div className="fg-drawer__foot">
+            <StatusBanco compacto />
+            <a href={LINKS_OFICIAIS.prefeitura} target="_blank" rel="noreferrer noopener" className="fg-drawer__ext">
+              Site da Prefeitura <ExternalLink size={13} aria-hidden />
+            </a>
+          </div>
+        </aside>
+      </div>
 
       {!isSupabaseConfigured && (
         <div className="banner" role="status">
-          Supabase não configurado — preencha as chaves no <code>.env</code>.
+          Banco de dados não configurado — preencha as chaves no <code>.env</code>.
         </div>
       )}
 
-      {/* Área Principal de Conteúdo */}
-      <main className="container main">
+      <main id="conteudo" className="container main">
         <Outlet />
       </main>
 
-      {/* ====================================================================
-          BARRA INFERIOR FIXA NO CELULAR (UX DE APLICATIVO NATIVO)
-          ==================================================================== */}
-      <nav className="fg-bottom-nav" aria-label="Navegação rápida móvel">
-        {[
-          { path: '', label: 'Início', icone: <LayoutDashboard size={18} /> },
-          { path: 'financas', label: 'Finanças', icone: <TrendingUp size={18} /> },
-          { path: 'despesas', label: 'Gastos', icone: <Building2 size={18} /> },
-          { path: 'decretos', label: 'Decretos', icone: <ArrowRightLeft size={18} /> },
-          { path: 'politicos', label: 'Câmara', icone: <Users size={18} /> },
-        ].map((item) => {
-          const isActive =
-            item.path === ''
-              ? location.pathname === '/'
-              : location.pathname.startsWith(`/${item.path}`);
+      {/* Barra inferior (somente celular) */}
+      <nav className="fg-tabbar" aria-label="Acesso rápido">
+        {secoesBarra.map((s) => {
+          const ativa = secaoAtiva(s, pathname);
           return (
             <Link
-              key={item.path}
-              to={`/${item.path}`}
-              onClick={fecharMenu}
-              className={`fg-bottom-nav__item ${isActive ? 'is-active' : ''}`}
+              key={s.path}
+              to={rotaDaSecao(s)}
+              className={`fg-tabbar__item${ativa ? ' is-active' : ''}`}
+              aria-current={ativa ? 'page' : undefined}
             >
-              <span className="fg-bottom-nav__icon" aria-hidden>
-                {item.icone}
-              </span>
-              <span>{item.label}</span>
+              <IconeSecao id={s.iconeId} size={20} />
+              <span>{s.labelCurto}</span>
             </Link>
           );
         })}
+        <button type="button" className="fg-tabbar__item" onClick={() => setMenuAberto(true)} aria-label="Abrir menu com todas as seções">
+          <Menu size={20} aria-hidden />
+          <span>Mais</span>
+        </button>
       </nav>
 
-      {/* ====================================================================
-          RODAPÉ INSTITUCIONAL DE AUDITORIA CIDADÃ
-          ==================================================================== */}
+      {/* Rodapé */}
       <footer className="footer">
         <div className="container">
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: 16,
-              marginBottom: 14,
-            }}
-          >
-            <div>
-              <strong style={{ fontSize: '1.05rem', color: '#ffffff' }}>
-                FISCALIZA GUARULHOS · AUDITORIA CIDADÃ &amp; TRANSPARÊNCIA ORÇAMENTÁRIA
-              </strong>
-              <p className="muted small" style={{ marginTop: 4 }}>
-                Plataforma cívica independente de controle social, rastreabilidade de decretos e acompanhamento dos
-                gastos públicos de Guarulhos (IBGE 3518800) · <strong>fiscalizaguarulhos.vercel.app</strong>
+          <div className="fg-footer__grid">
+            <div className="fg-footer__about">
+              <Marca />
+              <p>
+                Plataforma cívica independente que reúne, em linguagem simples, os gastos públicos, os decretos e os
+                representantes de {PLATAFORMA.municipio}. Todo número tem fonte oficial e link para você conferir.
               </p>
             </div>
-            <div style={{ display: 'flex', gap: 12, fontSize: '0.84rem', flexWrap: 'wrap' }}>
-              <Link to="/despesas" className="fg-link">
-                Fornecedores 2026
-              </Link>
-              <span>·</span>
-              <Link to="/decretos" className="fg-link">
-                Decretos (demonstração)
-              </Link>
-              <span>·</span>
-              <Link to="/politicos" className="fg-link">
-                34 Vereadores
-              </Link>
-              <span>·</span>
-              <Link to="/fontes" className="fg-link">
-                Status das Fontes
-              </Link>
-              <span>·</span>
-              <Link to="/privacidade" className="fg-link">
-                Segurança &amp; LGPD
-              </Link>
-              <span>·</span>
-              <a
-                href="https://www.guarulhos.sp.gov.br"
-                target="_blank"
-                rel="noreferrer noopener"
-                className="fg-link"
-              >
-                Site da Prefeitura ↗
-              </a>
-            </div>
+
+            <nav className="fg-footer__col" aria-label="Seções do site">
+              <h3>Navegue</h3>
+              <ul>
+                {SECOES.filter((s) => s.path !== '').map((s) => (
+                  <li key={s.path}>
+                    <Link to={rotaDaSecao(s)}>{s.label}</Link>
+                  </li>
+                ))}
+              </ul>
+            </nav>
+
+            <nav className="fg-footer__col" aria-label="Fontes oficiais">
+              <h3>Fontes oficiais</h3>
+              <ul>
+                <li>
+                  <a href={LINKS_OFICIAIS.tce} target="_blank" rel="noreferrer noopener">
+                    TCE-SP · Transparência <ExternalLink size={12} aria-hidden />
+                  </a>
+                </li>
+                <li>
+                  <a href={LINKS_OFICIAIS.diarioExecutivoCalendario} target="_blank" rel="noreferrer noopener">
+                    Diário do Executivo ({QTD_DIARIOS_EXECUTIVO}) <ExternalLink size={12} aria-hidden />
+                  </a>
+                </li>
+                <li>
+                  <a href={LINKS_OFICIAIS.diarioLegislativo} target="_blank" rel="noreferrer noopener">
+                    Diário do Legislativo ({QTD_DIARIOS_LEGISLATIVO}) <ExternalLink size={12} aria-hidden />
+                  </a>
+                </li>
+                <li>
+                  <a href={LINKS_OFICIAIS.prefeitura} target="_blank" rel="noreferrer noopener">
+                    Prefeitura <ExternalLink size={12} aria-hidden />
+                  </a>
+                </li>
+                <li>
+                  <a href={LINKS_OFICIAIS.camara} target="_blank" rel="noreferrer noopener">
+                    Câmara Municipal <ExternalLink size={12} aria-hidden />
+                  </a>
+                </li>
+                <li>
+                  <a href={LINKS_OFICIAIS.tse} target="_blank" rel="noreferrer noopener">
+                    TSE · Candidaturas <ExternalLink size={12} aria-hidden />
+                  </a>
+                </li>
+              </ul>
+            </nav>
           </div>
-          <p className="muted small" style={{ borderTop: '1px solid rgba(255,255,255,0.14)', paddingTop: 12 }}>
-            <strong>Princípio Editorial e Metodologia Contábil:</strong> FATO → FONTE → DADOS AUDITÁVEIS. Todas as
-            informações financeiras e orçamentárias têm origem nas prestações de contas oficiais enviadas ao sistema
-            AUDESP do Tribunal de Contas do Estado de São Paulo (TCE-SP) e nas edições publicadas no Diário Oficial do
-            Município de Guarulhos (Lei Federal nº 4.320/1964, Lei Complementar nº 101/2000 - LRF, Lei nº 12.527/2011 -
-            LAI e Lei nº 13.709/2018 - LGPD).
+
+          <p className="fg-footer__legal">
+            <strong>Como trabalhamos:</strong> fato → fonte → dado conferível. As informações vêm das prestações de
+            contas enviadas ao TCE-SP (Audesp) e das edições do Diário Oficial de {PLATAFORMA.municipio}, seguindo a Lei
+            4.320/1964, a Lei de Responsabilidade Fiscal, a Lei de Acesso à Informação e a LGPD.
+          </p>
+          <p className="fg-footer__copy">
+            © {new Date().getFullYear()} {PLATAFORMA.nome} · {PLATAFORMA.siteHost}
           </p>
         </div>
       </footer>

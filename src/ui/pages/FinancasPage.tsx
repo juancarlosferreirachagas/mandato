@@ -1,152 +1,157 @@
 /**
  * ============================================================================
- * PÁGINA: BALANÇO ORÇAMENTÁRIO — RECEITAS ARRECADADAS × DESPESAS LIQUIDADAS
+ * PÁGINA: RECEITAS E GASTOS — DE ONDE VEM E PARA ONDE VAI O DINHEIRO
  * Rota: /financas
- * Projeto: Fiscaliza Guarulhos (IBGE 3518800)
- * ============================================================================
- *
- * ARQUITETURA E PADRÃO CONTÁBIL (MCASP / STN & TCE-SP AUDESP):
- * 1. Demonstrativo de Execução Orçamentária:
- *    Compara a Receita Efetivamente Arrecadada (Tributos Municipais, Transferências
- *    Constitucionais ICMS/IPVA/FUNDEB/SUS e Operações de Crédito) com a Despesa
- *    Liquidada e Paga no mesmo período.
- *
- * 2. Classificação por Natureza de Receita e Fonte de Recurso ("Carimbo"):
- *    Traduz a árvore contábil do AUDESP (Categorias Econômicas 1, 2, 7 e 8)
- *    para linguagem acessível ao cidadão e ao auditor.
- *
- * 3. Integração com Alterações Orçamentárias (/decretos):
- *    Conecta o superávit/excesso de arrecadação diretamente aos Decretos
- *    Executivos extraídos do Diário Oficial de Guarulhos (Lei 4.320/64, Art. 43).
  * ============================================================================
  */
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { StatusBanco } from '../components/StatusFontes';
 import {
   ArrowRightLeft,
-  ArrowUpRight,
   Building2,
   Landmark,
   Scale,
   TrendingUp,
 } from 'lucide-react';
+import { StatusBanco } from '../components/StatusFontes';
 import { despesasRepository, type DespesaPorArea } from '@/repositories/despesasRepository';
 import { receitasRepository, type ReceitaLinha } from '@/repositories/receitasRepository';
+import { PLATAFORMA, QTD_DECRETOS } from '@/domain/plataforma';
 import { useAsync } from '../hooks/useAsync';
 import { ErrorBox } from '../components/common';
 import { BarraHorizontal } from '../components/Graficos';
 import { AreaDetalheModal } from '../components/AreaDetalheModal';
+import { GradeAreas } from '../components/AreasOrcamento';
 import { brl, brlCompacto, inteiro, mesAbrev, mesNome, nomeLegivel, nomeOrgaoCurto } from '../format';
 
-/** Abas analíticas do painel de Finanças */
 type Aba = 'geral' | 'receitas' | 'despesas';
 const ABAS: { id: Aba; rotulo: string }[] = [
-  { id: 'geral', rotulo: 'Visão Geral & Balanço' },
-  { id: 'receitas', rotulo: 'De Onde Vem (Receitas)' },
-  { id: 'despesas', rotulo: 'Para Onde Vai (Despesas)' },
+  { id: 'geral', rotulo: 'Visão geral' },
+  { id: 'receitas', rotulo: 'De onde vem' },
+  { id: 'despesas', rotulo: 'Para onde vai' },
+];
+
+type AnoOpcao = 2026 | 2025 | 'todos';
+const OPCOES_ANO: { id: AnoOpcao; rotulo: string }[] = [
+  { id: 2026, rotulo: '2026' },
+  { id: 2025, rotulo: '2025' },
+  { id: 'todos', rotulo: '2025–2026' },
 ];
 
 const pct = (v: number, total: number) => (total > 0 ? Math.round((v / total) * 1000) / 10 : 0);
 const pctTxt = (v: number, total: number) => `${pct(v, total).toLocaleString('pt-BR')}%`;
 
-/** População oficial de Guarulhos (Censo IBGE) para cálculo per capita */
-const POPULACAO_GUARULHOS = 1291771;
-
-/**
- * Executa a carga paralela das agregações de Receitas e Despesas via RPCs no Supabase.
- */
-async function carregar(ano: number, mes: number | null) {
+async function carregar(ano: number | null, mes: number | null) {
+  const mesEfetivo = ano === null ? null : mes;
   const [recMeses, despMeses] = await Promise.all([
     receitasRepository.porMes(ano),
     despesasRepository.porMes({ ano }),
   ]);
   const [recResumo, despResumo, arvore, fontes, orgaos, areas, top] = await Promise.all([
-    receitasRepository.resumo(ano, mes),
-    despesasRepository.resumo({ ano, mes }),
-    receitasRepository.arvore(ano, mes),
-    receitasRepository.porFonte(ano, mes),
-    despesasRepository.porOrgao({ ano, mes }),
-    despesasRepository.porArea({ ano, mes }),
-    despesasRepository.ranking({ ano, mes, somenteExternos: true, limite: 10 }),
+    receitasRepository.resumo(ano, mesEfetivo),
+    despesasRepository.resumo({ ano, mes: mesEfetivo }),
+    receitasRepository.arvore(ano, mesEfetivo),
+    receitasRepository.porFonte(ano, mesEfetivo),
+    despesasRepository.porOrgao({ ano, mes: mesEfetivo }),
+    despesasRepository.porArea({ ano, mes: mesEfetivo }),
+    despesasRepository.ranking({ ano, mes: mesEfetivo, somenteExternos: true, limite: 10 }),
   ]);
   return { recMeses, despMeses, recResumo, despResumo, arvore, fontes, orgaos, areas, top };
 }
 
-/**
- * Gráfico comparativo Receita × Despesa mês a mês com suporte a filtro interativo.
- */
+interface PontoComparativo {
+  exercicio: number;
+  mes: number;
+  v: number;
+}
+
 function Comparativo({
   rec,
   desp,
   mesSel,
-  onMes,
+  anoSel,
+  onSelecionar,
 }: {
-  rec: { mes: number; v: number }[];
-  desp: { mes: number; v: number }[];
+  rec: PontoComparativo[];
+  desp: PontoComparativo[];
   mesSel: number | null;
-  onMes: (m: number | null) => void;
+  anoSel: number | null;
+  onSelecionar: (mes: number, exercicio: number) => void;
 }) {
-  const meses = Array.from(new Set([...rec.map((r) => r.mes), ...desp.map((d) => d.mes)])).sort((a, b) => a - b);
-  const max = Math.max(...rec.map((r) => r.v), ...desp.map((d) => d.v), 1);
-  const get = (arr: { mes: number; v: number }[], m: number) => arr.find((x) => x.mes === m)?.v ?? 0;
+  const chaves = useMemo(() => {
+    const mapa = new Map<string, { exercicio: number; mes: number }>();
+    for (const r of rec) mapa.set(`${r.exercicio}-${r.mes}`, { exercicio: r.exercicio, mes: r.mes });
+    for (const d of desp) mapa.set(`${d.exercicio}-${d.mes}`, { exercicio: d.exercicio, mes: d.mes });
+    return [...mapa.values()].sort((a, b) => a.exercicio - b.exercicio || a.mes - b.mes);
+  }, [rec, desp]);
 
-  return (
-    <div className="fin-comp" role="img" aria-label="Comparativo mensal entre receita arrecadada e despesa paga">
-      {meses.map((m) => (
-        <button
-          key={m}
-          type="button"
-          className={`fin-comp__col${mesSel === m ? ' is-sel' : ''}`}
-          onClick={() => onMes(mesSel === m ? null : m)}
-          aria-pressed={mesSel === m}
-          title={`${mesNome(m)}: arrecadou ${brl(get(rec, m))} · pagou ${brl(get(desp, m))}`}
-        >
-          <span className="fin-comp__bars">
-            <i className="fin-comp__b fin-comp__b--rec" style={{ height: `${Math.max((get(rec, m) / max) * 100, 2)}%` }} />
-            <i
-              className="fin-comp__b fin-comp__b--desp"
-              style={{ height: `${Math.max((Math.max(get(desp, m), 0) / max) * 100, 2)}%` }}
-            />
-          </span>
-          <span className="fin-comp__lbl">{mesAbrev(m)}</span>
-        </button>
-      ))}
+  const max = Math.max(...rec.map((r) => r.v), ...desp.map((d) => d.v), 1);
+  const multiAno = anoSel === null || new Set(chaves.map((c) => c.exercicio)).size > 1;
+  const get = (arr: PontoComparativo[], ex: number, m: number) =>
+    arr.find((x) => x.exercicio === ex && x.mes === m)?.v ?? 0;
+
+  const barras = (
+    <div
+      className={`fin-comp${multiAno ? ' fin-comp--multi' : ''}`}
+      style={multiAno ? ({ '--cols': chaves.length } as CSSProperties) : undefined}
+      role="img"
+      aria-label="Comparativo mensal entre dinheiro que entrou e dinheiro gasto"
+    >
+      {chaves.map(({ exercicio, mes }) => {
+        const vr = get(rec, exercicio, mes);
+        const vd = get(desp, exercicio, mes);
+        const ativo = !multiAno && mesSel === mes;
+        const rotulo = multiAno ? `${mesAbrev(mes)}/${String(exercicio).slice(2)}` : mesAbrev(mes);
+        return (
+          <button
+            key={`${exercicio}-${mes}`}
+            type="button"
+            className={`fin-comp__col${ativo ? ' is-sel' : ''}`}
+            onClick={() => onSelecionar(mes, exercicio)}
+            aria-pressed={ativo}
+            title={`${mesNome(mes)}/${exercicio}: entrou ${brl(vr)} · saiu ${brl(vd)}`}
+          >
+            <span className="fin-comp__bars">
+              <i className="fin-comp__b fin-comp__b--rec" style={{ height: `${Math.max((vr / max) * 100, 2)}%` }} />
+              <i
+                className="fin-comp__b fin-comp__b--desp"
+                style={{ height: `${Math.max((Math.max(vd, 0) / max) * 100, 2)}%` }}
+              />
+            </span>
+            <span className="fin-comp__lbl">{rotulo}</span>
+          </button>
+        );
+      })}
     </div>
   );
+
+  return multiAno ? <div className="fin-comp-scroll">{barras}</div> : barras;
 }
 
-/**
- * Traduz a nomenclatura contábil do Plano de Contas (MCASP) para linguagem cidadã.
- */
 function explicarGrupoReceita(nome: string): string {
   const n = nome.toLowerCase();
   if (n.includes('transferências correntes')) {
-    return 'Repasses constitucionais obrigatórios da União e do Estado de SP para Guarulhos (ICMS, IPVA, FPM, FUNDEB para Educação e SUS para Saúde).';
+    return 'Repasses obrigatórios da União e do Estado (ICMS, IPVA, FPM, FUNDEB para Educação e SUS para Saúde).';
   }
   if (n.includes('impostos, taxas')) {
-    return 'Tributos arrecadados diretamente em Guarulhos (IPTU dos imóveis, ISS das empresas e serviços, ITBI e taxas de fiscalização).';
+    return 'Tributos pagos na cidade: IPTU dos imóveis, ISS das empresas e serviços, ITBI e taxas municipais.';
   }
   if (n.includes('contribuições')) {
-    return 'Contribuições previdenciárias para o IPREM e custeio da iluminação pública (CIP/COSIP).';
+    return 'Contribuições para a previdência dos servidores (IPREM) e para a iluminação pública.';
   }
   if (n.includes('patrimonial')) {
-    return 'Rendimentos financeiros das aplicações de caixa do Tesouro Municipal, dividendos e permissões de uso.';
+    return 'Rendimentos das aplicações do dinheiro em caixa e aluguéis/permissões de uso.';
   }
   if (n.includes('operações de crédito')) {
-    return 'Financiamentos contratados junto a bancos públicos/multilaterais para obras estruturantes.';
+    return 'Empréstimos e financiamentos contratados para obras na cidade.';
   }
   if (n.includes('transferências de capital')) {
-    return 'Convênios federais e estaduais exclusivos para obras e aquisição de equipamentos permanentes.';
+    return 'Verbas enviadas pelo Estado ou União para obras e compra de equipamentos.';
   }
-  return 'Receitas públicas contabilizadas pelo Tesouro Municipal de Guarulhos no sistema AUDESP.';
+  return 'Receitas públicas registradas pelo município no TCE-SP.';
 }
 
-/**
- * Árvore hierárquica de Receitas (Categoria > Subcategoria/Origem > Rubrica)
- * com expansão progressiva para auditoria detalhada.
- */
 function ArvoreReceitas({ linhas }: { linhas: ReceitaLinha[] }) {
   const [expandidos, setExpandidos] = useState<Record<string, boolean>>({});
   const total = linhas.reduce((s, l) => s + l.total, 0);
@@ -163,7 +168,7 @@ function ArvoreReceitas({ linhas }: { linhas: ReceitaLinha[] }) {
     return [...porSub.values()].sort((a, b) => b.total - a.total);
   }, [linhas]);
 
-  if (!grupos.length) return <p className="muted">Sem receitas registradas no período selecionado.</p>;
+  if (!grupos.length) return <p className="muted">Sem receitas registradas para o período selecionado.</p>;
 
   return (
     <div className="fin-acc">
@@ -203,8 +208,8 @@ function ArvoreReceitas({ linhas }: { linhas: ReceitaLinha[] }) {
                     onClick={() => setExpandidos((ant) => ({ ...ant, [chave]: !mostrarTodas }))}
                   >
                     {mostrarTodas
-                      ? 'Recolher lista de rubricas ↑'
-                      : `Exibir todas as ${g.rubricas.length} rubricas auditadas (+${g.rubricas.length - 12} itens) ↓`}
+                      ? 'Mostrar menos itens ↑'
+                      : `Ver todos os ${g.rubricas.length} itens (+${g.rubricas.length - 12}) ↓`}
                   </button>
                 </li>
               )}
@@ -218,12 +223,18 @@ function ArvoreReceitas({ linhas }: { linhas: ReceitaLinha[] }) {
 
 export function FinancasPage() {
   const [params, setParams] = useSearchParams();
-  const ano = Number(params.get('ano')) || new Date().getFullYear();
-  const mes = params.get('mes') ? Number(params.get('mes')) : null;
+  const anoRaw = params.get('ano');
+  const ano: number | null = anoRaw === 'todos' ? null : Number(anoRaw) === 2025 ? 2025 : 2026;
+  const mes = ano !== null && params.get('mes') ? Number(params.get('mes')) : null;
   const [aba, setAba] = useState<Aba>('geral');
   const [areaSelecionada, setAreaSelecionada] = useState<DespesaPorArea | null>(null);
 
   const { data, loading, error } = useAsync(() => carregar(ano, mes), [ano, mes]);
+
+  const selecionarAno = (op: AnoOpcao) => {
+    setParams({ ano: String(op) }, { replace: true });
+  };
+
   const setMes = (m: number | null) => {
     const p = new URLSearchParams(params);
     if (m) p.set('mes', String(m));
@@ -231,95 +242,109 @@ export function FinancasPage() {
     setParams(p, { replace: true });
   };
 
+  const aoClicarMesComparativo = (m: number, exercicio: number) => {
+    if (ano === null) {
+      setParams({ ano: String(exercicio), mes: String(m) }, { replace: true });
+    } else {
+      setMes(mes === m ? null : m);
+    }
+  };
+
   const rec = data?.recResumo.total_arrecadado ?? 0;
   const desp = data?.despResumo.total_liquido ?? 0;
   const saldo = rec - desp;
-  const recMeses = data?.recMeses.map((r) => ({ mes: r.mes, v: r.total_liquido })) ?? [];
-  const despMeses =
-    data?.despMeses.filter((d) => d.exercicio === ano).map((d) => ({ mes: d.mes, v: d.total_liquido })) ?? [];
-  const periodo = mes ? `${mesNome(mes)} de ${ano}` : `${ano} (acumulado até ${mesNome(data?.recResumo.ultimo_mes ?? 8)})`;
+  const recMeses: PontoComparativo[] =
+    data?.recMeses.map((r) => ({ exercicio: r.exercicio, mes: r.mes, v: r.total_liquido })) ?? [];
+  const despMeses: PontoComparativo[] =
+    data?.despMeses
+      .filter((d) => ano === null || d.exercicio === ano)
+      .map((d) => ({ exercicio: d.exercicio, mes: d.mes, v: d.total_liquido })) ?? [];
+
+  const periodo =
+    ano === null
+      ? '2025 e 2026 (consolidado)'
+      : mes
+      ? `${mesNome(mes)} de ${ano}`
+      : `${ano} (${ano === 2025 ? 'ano completo' : `até ${mesNome(data?.recResumo.ultimo_mes ?? 9)}`})`;
+
   const maxOrgao = Math.max(...(data?.orgaos.map((o) => o.total_liquido) ?? [1]), 1);
   const maxTop = Math.max(...(data?.top.map((t) => t.total_liquido) ?? [1]), 1);
   const maxFonte = Math.max(...(data?.fontes.map((f) => f.total) ?? [1]), 1);
-  const recPorMorador = rec > 0 ? Math.round(rec / POPULACAO_GUARULHOS) : 0;
-  const despPorMorador = desp > 0 ? Math.round(desp / POPULACAO_GUARULHOS) : 0;
+  const recPorMorador = rec > 0 ? Math.round(rec / PLATAFORMA.populacao) : 0;
+  const despPorMorador = desp > 0 ? Math.round(desp / PLATAFORMA.populacao) : 0;
+  const anoQuery = ano === null ? 'todos' : String(ano);
 
   return (
     <div className="fg-page-container">
-      {/* ====================================================================
-          CABEÇALHO EXECUTIVO DO BALANÇO ORÇAMENTÁRIO
-          ==================================================================== */}
-      <header className="fg-hero" style={{ marginBottom: 18, padding: '22px 24px' }}>
+      {/* Cabeçalho */}
+      <header className="fg-hero" style={{ marginBottom: 18 }}>
         <div className="fg-hero-split">
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <span className="fg-hero__eyebrow">
                 <span className="fg-hero__dot" />
-                BALANÇO ORÇAMENTÁRIO · RECEITAS × DESPESAS · TCE-SP AUDESP
+                Quanto entra e quanto sai · dados do TCE-SP
               </span>
               <StatusBanco />
             </div>
 
             <h1 className="fg-hero__title" style={{ marginTop: 8, marginBottom: 6 }}>
-              Receitas e Gastos de <span>Guarulhos</span> Explicados
+              Receitas e gastos de <span>{PLATAFORMA.municipio}</span>
             </h1>
             <p className="fg-hero__lead">
-              Acompanhe quanto dinheiro entra no Tesouro Municipal, de qual tributo ou transferência ele vem e para qual
-              serviço público ele vai em {periodo}.
+              Veja quanto dinheiro entrou nos cofres da Prefeitura, de quais impostos e repasses ele veio e em que
+              serviços foi usado — {periodo}.
             </p>
 
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
-              <button
-                type="button"
-                onClick={() => setParams({ ano: '2026' })}
-                className={ano === 2026 ? 'fg-btn-audit-live' : 'fg-btn-audit-ghost'}
-                style={{ cursor: 'pointer' }}
-              >
-                <span>Exercício 2026 (R$ 5,31 bi rec. × R$ 4,28 bi desp.)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setParams({ ano: '2025' })}
-                className={ano === 2025 ? 'fg-btn-audit-live' : 'fg-btn-audit-ghost'}
-                style={{ cursor: 'pointer' }}
-              >
-                <span>Exercício 2025 Completo (R$ 7,24 bi rec. × R$ 6,34 bi desp.)</span>
-              </button>
+            <div className="fg-hero__actions">
+              <div className="fg-seg" role="group" aria-label="Escolha o período">
+                {OPCOES_ANO.map((op) => {
+                  const ativo = (op.id === 'todos' && ano === null) || ano === op.id;
+                  return (
+                    <button
+                      key={String(op.id)}
+                      type="button"
+                      className={`fg-seg__btn${ativo ? ' is-active' : ''}`}
+                      aria-pressed={ativo}
+                      onClick={() => selecionarAno(op.id)}
+                    >
+                      {op.rotulo}
+                    </button>
+                  );
+                })}
+              </div>
               <Link to="/decretos" className="fg-btn-audit-ghost">
-                <ArrowRightLeft size={15} />
-                <span>262 Decretos &amp; 212 Diários</span>
+                <ArrowRightLeft size={15} aria-hidden />
+                <span>Ver os {QTD_DECRETOS} decretos</span>
               </Link>
             </div>
           </div>
 
-          {/* 4 KPIs do Balanço no Hero */}
           <div className="fg-hero-kpis">
             <div className="fg-hero-kpi">
-              <div className="fg-hero-kpi__lbl">Total Arrecadado</div>
-              <div className="fg-hero-kpi__val fg-hero-kpi__val--emerald">{ data ? brlCompacto(rec) : '...' }</div>
-              <div className="fg-hero-kpi__sub">R$ {inteiro(recPorMorador)} por habitante</div>
+              <div className="fg-hero-kpi__lbl">Dinheiro que entrou</div>
+              <div className="fg-hero-kpi__val fg-hero-kpi__val--emerald">{data ? brlCompacto(rec) : '…'}</div>
+              <div className="fg-hero-kpi__sub">R$ {inteiro(recPorMorador)} por morador</div>
             </div>
 
             <div className="fg-hero-kpi">
-              <div className="fg-hero-kpi__lbl">Total Liquidado e Pago</div>
-              <div className="fg-hero-kpi__val fg-hero-kpi__val--amber">{ data ? brlCompacto(desp) : '...' }</div>
-              <div className="fg-hero-kpi__sub">R$ {inteiro(despPorMorador)} por habitante</div>
+              <div className="fg-hero-kpi__lbl">Dinheiro gasto</div>
+              <div className="fg-hero-kpi__val fg-hero-kpi__val--amber">{data ? brlCompacto(desp) : '…'}</div>
+              <div className="fg-hero-kpi__sub">R$ {inteiro(despPorMorador)} por morador</div>
             </div>
 
             <div className="fg-hero-kpi">
-              <div className="fg-hero-kpi__lbl">Resultado no Período</div>
-              <div className="fg-hero-kpi__val fg-hero-kpi__val--sky">{ data ? brlCompacto(saldo) : '...' }</div>
+              <div className="fg-hero-kpi__lbl">Saldo do período</div>
+              <div className="fg-hero-kpi__val fg-hero-kpi__val--sky">{data ? brlCompacto(saldo) : '…'}</div>
               <div className="fg-hero-kpi__sub">
-                {saldo >= 0 ? 'Superávit primário de caixa' : 'Déficit financeiro no mês'}
+                {saldo >= 0 ? 'Entrou mais do que saiu' : 'Saiu mais do que entrou'}
               </div>
             </div>
 
             <div className="fg-hero-kpi">
-              <div className="fg-hero-kpi__lbl">Índice de Execução</div>
-              <div className="fg-hero-kpi__val">
-                {rec > 0 ? `${Math.round((desp / rec) * 100)}%` : '...'}
-              </div>
-              <div className="fg-hero-kpi__sub">De cada R$ 100 arrecadados</div>
+              <div className="fg-hero-kpi__lbl">Parte já gasta</div>
+              <div className="fg-hero-kpi__val">{rec > 0 ? `${Math.round((desp / rec) * 100)}%` : '…'}</div>
+              <div className="fg-hero-kpi__sub">do que foi arrecadado</div>
             </div>
           </div>
         </div>
@@ -329,10 +354,9 @@ export function FinancasPage() {
 
       {data && (
         <>
-          {/* Guia Didático + Filtro de Competência */}
           <div className="fg-audit-explainer">
             <div className="fg-audit-explainer__icon">
-              <Scale size={20} />
+              <Scale size={20} aria-hidden />
             </div>
             <div
               className="fg-audit-explainer__content"
@@ -346,33 +370,37 @@ export function FinancasPage() {
               }}
             >
               <div style={{ maxWidth: 820 }}>
-                <strong>Leitura Executiva do Orçamento de Guarulhos (1,29 milhão de moradores):</strong>
+                <strong>Como ler esta página:</strong>
                 <p>
-                  Tudo o que é pago em <strong>IPTU, ISS, IPVA e ICMS</strong> compõe a arrecadação de{' '}
-                  <strong>{brlCompacto(rec)}</strong>. Quando a Prefeitura precisa remanejar verbas entre áreas ao
-                  longo do ano, ela publica um Decreto no Diário Oficial — que você pode auditar em{' '}
+                  Impostos como <strong>IPTU, ISS, IPVA e ICMS</strong> e repasses do governo somaram{' '}
+                  <strong>{brlCompacto(rec)}</strong>. Quando a Prefeitura precisa mudar verba de uma área para outra,
+                  ela publica um decreto no Diário Oficial. Você pode conferir em{' '}
                   <Link to="/decretos" className="fg-link">
-                    Decretos Explicados
+                    Decretos
                   </Link>
                   .
                 </p>
               </div>
 
-              <div className="fin-filter" style={{ margin: 0 }}>
-                <label htmlFor="fin-mes">Competência:</label>
-                <select
-                  id="fin-mes"
-                  value={mes ?? ''}
-                  onChange={(e) => setMes(e.target.value ? Number(e.target.value) : null)}
-                >
-                  <option value="">Ano acumulado ({ano})</option>
-                  {Array.from(new Set(recMeses.map((r) => r.mes))).map((m) => (
-                    <option key={m} value={m}>
-                      {mesNome(m)}
-                    </option>
-                  ))}
-                </select>
-              </div>
+              {ano !== null ? (
+                <div className="fin-filter" style={{ margin: 0 }}>
+                  <label htmlFor="fin-mes">Mês:</label>
+                  <select
+                    id="fin-mes"
+                    value={mes ?? ''}
+                    onChange={(e) => setMes(e.target.value ? Number(e.target.value) : null)}
+                  >
+                    <option value="">Ano todo ({ano})</option>
+                    {Array.from(new Set(recMeses.map((r) => r.mes))).map((m) => (
+                      <option key={m} value={m}>
+                        {mesNome(m)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <span className="fg-badge fg-badge--blue">Consolidado 2025 + 2026</span>
+              )}
             </div>
           </div>
 
@@ -380,6 +408,7 @@ export function FinancasPage() {
             {ABAS.map((a) => (
               <button
                 key={a.id}
+                type="button"
                 role="tab"
                 aria-selected={aba === a.id}
                 className={`fin-tab${aba === a.id ? ' is-active' : ''}`}
@@ -395,21 +424,27 @@ export function FinancasPage() {
               <div className="fg-grid-2">
                 <div className="fg-card">
                   <h2 className="fg-h2" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <TrendingUp size={18} color="#059669" />
-                    <span>Arrecadação × Pagamentos Mês a Mês</span>
+                    <TrendingUp size={18} color="#059669" aria-hidden />
+                    <span>Quanto entrou e quanto saiu por mês</span>
                   </h2>
-                  <p className="fg-sub">Clique em qualquer mês para filtrar toda a análise orçamentária.</p>
+                  <p className="fg-sub">Toque em um mês para filtrar os dados daquele período.</p>
                   <div className="fin-legend">
                     <span>
                       <i className="fin-dot fin-dot--rec" />
-                      Arrecadado (Entrou)
+                      Entrou (arrecadado)
                     </span>
                     <span>
                       <i className="fin-dot fin-dot--desp" />
-                      Pago (Saiu)
+                      Saiu (pago)
                     </span>
                   </div>
-                  <Comparativo rec={recMeses} desp={despMeses} mesSel={mes} onMes={setMes} />
+                  <Comparativo
+                    rec={recMeses}
+                    desp={despMeses}
+                    mesSel={mes}
+                    anoSel={ano}
+                    onSelecionar={aoClicarMesComparativo}
+                  />
                 </div>
 
                 <div className="fg-card">
@@ -422,40 +457,36 @@ export function FinancasPage() {
                       flexWrap: 'wrap',
                     }}
                   >
-                    <h2 className="fg-h2">Composição da Receita por Categoria Econômica</h2>
+                    <h2 className="fg-h2">De onde vem o dinheiro</h2>
                     <button
                       type="button"
                       onClick={() => setAba('receitas')}
                       className="fg-link"
                       style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
                     >
-                      Detalhar todos os tributos →
+                      Ver impostos e repasses →
                     </button>
                   </div>
                   <p className="fg-sub">Origem dos {brlCompacto(rec)} arrecadados em {periodo}:</p>
-                  <div
-                    onClick={() => setAba('receitas')}
-                    style={{ cursor: 'pointer' }}
-                    title="Clique para abrir a árvore completa de impostos e transferências"
-                  >
+                  <div>
                     <BarraHorizontal
-                      nome="Receitas Correntes (Impostos Municipais IPTU/ISS e Transferências SUS/FUNDEB/ICMS)"
+                      nome="Impostos e repasses do dia a dia (IPTU, ISS, ICMS, SUS, FUNDEB)"
                       valor={data.recResumo.total_corrente}
                       max={rec || 1}
                       accent
-                      meta={`${pctTxt(data.recResumo.total_corrente, rec)} · Clique para detalhar`}
+                      meta={`${pctTxt(data.recResumo.total_corrente, rec)} do total`}
                     />
                     <BarraHorizontal
-                      nome="Receitas Intra-Orçamentárias (Contribuições Patronais ao IPREM)"
+                      nome="Previdência dos servidores (contribuições ao IPREM)"
                       valor={data.recResumo.total_intra}
                       max={rec || 1}
-                      meta={`${pctTxt(data.recResumo.total_intra, rec)} · Clique para detalhar`}
+                      meta={`${pctTxt(data.recResumo.total_intra, rec)} do total`}
                     />
                     <BarraHorizontal
-                      nome="Receitas de Capital (Operações de Crédito, Convênios de Obras e Alienações)"
+                      nome="Obras e convênios (empréstimos e repasses para investimentos)"
                       valor={data.recResumo.total_capital}
                       max={rec || 1}
-                      meta={`${pctTxt(data.recResumo.total_capital, rec)} · Clique para detalhar`}
+                      meta={`${pctTxt(data.recResumo.total_capital, rec)} do total`}
                     />
                   </div>
                 </div>
@@ -464,77 +495,11 @@ export function FinancasPage() {
               <div>
                 <div className="fg-section__head">
                   <div>
-                    <h2 className="fg-h2">Destinação da Despesa por Área Temática ({periodo})</h2>
-                    <p className="fg-sub">
-                      Clique em qualquer área para auditar as empresas e entidades que receberam pagamentos:
-                    </p>
+                    <h2 className="fg-h2">Para onde foi o dinheiro ({periodo})</h2>
+                    <p className="fg-sub">Toque em uma área para ver quais empresas e entidades receberam.</p>
                   </div>
                 </div>
-                <div className="fg-bento-areas">
-                  {data.areas.map((a) => {
-                    const percentual = pct(a.total_liquido, desp);
-                    return (
-                      <article
-                        key={a.area}
-                        className="fg-area-card"
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => setAreaSelecionada(a)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            setAreaSelecionada(a);
-                          }
-                        }}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <div>
-                          <div className="fg-area-card__head">
-                            <span className="fg-area-card__icon" aria-hidden>
-                              {a.icone}
-                            </span>
-                            <span className="fg-area-card__pct">{pctTxt(a.total_liquido, desp)}</span>
-                          </div>
-                          <h3 className="fg-area-card__title" style={{ marginTop: 8 }}>
-                            {a.area}
-                          </h3>
-                          <div className="fg-area-card__val" style={{ marginTop: 4 }}>
-                            {brlCompacto(a.total_liquido)}
-                          </div>
-                          <div className="fg-area-card__bar" style={{ marginTop: 6 }}>
-                            <div
-                              className="fg-area-card__fill"
-                              style={{ width: `${Math.min(100, Math.max(4, percentual * 2.4))}%` }}
-                            />
-                          </div>
-                          <p className="fg-area-card__desc" style={{ marginTop: 8 }}>
-                            {a.explicacao_pratica}
-                          </p>
-                        </div>
-                        <div style={{ marginTop: 10 }}>
-                          <div className="fg-area-card__meta">
-                            <span>{inteiro(a.qtd_pagamentos)} pagamentos</span>
-                            <span>{inteiro(a.qtd_credores)} credores</span>
-                          </div>
-                          <div
-                            style={{
-                              marginTop: 8,
-                              fontSize: '0.78rem',
-                              fontWeight: 800,
-                              color: '#0284c7',
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                            }}
-                          >
-                            <span>Auditar recebedores desta área</span>
-                            <ArrowUpRight size={14} />
-                          </div>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
+                <GradeAreas areas={data.areas} totalBase={desp} onSelecionar={setAreaSelecionada} />
               </div>
             </section>
           )}
@@ -543,14 +508,14 @@ export function FinancasPage() {
             <section className="fin-sec">
               <div className="fg-grid-2">
                 <div className="fg-card">
-                  <h2 className="fg-h2">Árvore Completa de Receitas Arrecadadas</h2>
-                  <p className="fg-sub">Expanda cada grupo contábil para auditar as rubricas de impostos e repasses:</p>
+                  <h2 className="fg-h2">Impostos e repasses detalhados</h2>
+                  <p className="fg-sub">Toque em um grupo para abrir cada imposto, taxa ou repasse:</p>
                   <ArvoreReceitas linhas={data.arvore} />
                 </div>
                 <div className="fg-card">
-                  <h2 className="fg-h2">Vinculação por Fonte de Recurso (Carimbo Orçamentário)</h2>
+                  <h2 className="fg-h2">Dinheiro carimbado vs. livre</h2>
                   <p className="fg-sub">
-                    Recursos vinculados (SUS, FUNDEB, Convênios) possuem destinação exclusiva; Tesouro Municipal custeia
+                    Verbas com carimbo (SUS, FUNDEB, convênios) só podem ir para aquela área. O Tesouro Municipal paga os
                     serviços gerais.
                   </p>
                   {data.fontes.map((f) => (
@@ -569,79 +534,15 @@ export function FinancasPage() {
 
           {aba === 'despesas' && (
             <section className="fin-sec">
-              <div className="fg-bento-areas">
-                {data.areas.map((a) => {
-                  const percentual = pct(a.total_liquido, desp);
-                  return (
-                    <article
-                      key={a.area}
-                      className="fg-area-card"
-                      role="button"
-                      tabIndex={0}
-                      onClick={() => setAreaSelecionada(a)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          setAreaSelecionada(a);
-                        }
-                      }}
-                      style={{ cursor: 'pointer' }}
-                    >
-                      <div>
-                        <div className="fg-area-card__head">
-                          <span className="fg-area-card__icon" aria-hidden>
-                            {a.icone}
-                          </span>
-                          <span className="fg-area-card__pct">{pctTxt(a.total_liquido, desp)}</span>
-                        </div>
-                        <h3 className="fg-area-card__title" style={{ marginTop: 8 }}>
-                          {a.area}
-                        </h3>
-                        <div className="fg-area-card__val" style={{ marginTop: 4 }}>
-                          {brlCompacto(a.total_liquido)}
-                        </div>
-                        <div className="fg-area-card__bar" style={{ marginTop: 6 }}>
-                          <div
-                            className="fg-area-card__fill"
-                            style={{ width: `${Math.min(100, Math.max(4, percentual * 2.4))}%` }}
-                          />
-                        </div>
-                        <p className="fg-area-card__desc" style={{ marginTop: 8 }}>
-                          {a.explicacao_pratica}
-                        </p>
-                      </div>
-                      <div style={{ marginTop: 10 }}>
-                        <div className="fg-area-card__meta">
-                          <span>{inteiro(a.qtd_pagamentos)} pagamentos</span>
-                          <span>{inteiro(a.qtd_credores)} credores</span>
-                        </div>
-                        <div
-                          style={{
-                            marginTop: 8,
-                            fontSize: '0.78rem',
-                            fontWeight: 800,
-                            color: '#0284c7',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                          }}
-                        >
-                          <span>Auditar recebedores desta área</span>
-                          <ArrowUpRight size={14} />
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })}
-              </div>
+              <GradeAreas areas={data.areas} totalBase={desp} onSelecionar={setAreaSelecionada} />
 
               <div className="fg-grid-2">
                 <div className="fg-card">
                   <h2 className="fg-h2" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <Landmark size={18} color="#09152b" />
-                    <span>Desembolso por Unidade Gestora (Prefeitura, IPREM e Câmara)</span>
+                    <Landmark size={18} color="#09152b" aria-hidden />
+                    <span>Quanto cada órgão pagou</span>
                   </h2>
-                  <p className="fg-sub">Total liquidado e pago por cada órgão municipal em {periodo}.</p>
+                  <p className="fg-sub">Total pago pela Prefeitura, Câmara e IPREM em {periodo}.</p>
                   {data.orgaos.map((o) => (
                     <BarraHorizontal
                       key={o.orgao}
@@ -649,8 +550,8 @@ export function FinancasPage() {
                       valor={o.total_liquido}
                       max={maxOrgao}
                       accent
-                      meta={`${pctTxt(o.total_liquido, desp)} do total · ${inteiro(o.qtd)} pagamentos · ${inteiro(o.qtd_credores)} credores`}
-                      to={`/despesas?ano=${ano}${mes ? `&mes=${mes}` : ''}&orgao=${encodeURIComponent(o.orgao)}`}
+                      meta={`${pctTxt(o.total_liquido, desp)} do total · ${inteiro(o.qtd)} pagamentos · ${inteiro(o.qtd_credores)} fornecedores`}
+                      to={`/despesas?ano=${anoQuery}${mes ? `&mes=${mes}` : ''}&orgao=${encodeURIComponent(o.orgao)}`}
                     />
                   ))}
                 </div>
@@ -658,12 +559,12 @@ export function FinancasPage() {
                   <div className="fg-section__head" style={{ marginBottom: 6 }}>
                     <div>
                       <h2 className="fg-h2" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Building2 size={18} color="#0284c7" />
-                        <span>Maiores Fornecedores no Período</span>
+                        <Building2 size={18} color="#1e5fa8" aria-hidden />
+                        <span>Quem mais recebeu</span>
                       </h2>
-                      <p className="fg-sub">Clique em qualquer empresa para abrir o dossiê completo de empenhos.</p>
+                      <p className="fg-sub">Toque em uma empresa para ver todos os pagamentos.</p>
                     </div>
-                    <Link to={`/despesas?ano=${ano}${mes ? `&mes=${mes}` : ''}`} className="fg-link">
+                    <Link to={`/despesas?ano=${anoQuery}${mes ? `&mes=${mes}` : ''}`} className="fg-link">
                       Ver todos →
                     </Link>
                   </div>
@@ -688,7 +589,7 @@ export function FinancasPage() {
         <AreaDetalheModal
           area={areaSelecionada}
           ano={ano}
-          mes={mes}
+          mes={ano === null ? null : mes}
           onClose={() => setAreaSelecionada(null)}
         />
       )}

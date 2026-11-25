@@ -1,9 +1,11 @@
+import { useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowUpRight, X } from 'lucide-react';
 import { despesasRepository, type DespesaPorArea } from '@/repositories/despesasRepository';
 import { useAsync } from '../hooks/useAsync';
+import { PLATAFORMA } from '@/domain/plataforma';
 import { brl, brlCompacto, dataBr, formatarCnpj, inteiro, nomeLegivel } from '../format';
-
-const POPULACAO_GUARULHOS = 1291771;
+import { IconeArea } from './AreasOrcamento';
 
 export function AreaDetalheModal({
   area,
@@ -12,7 +14,7 @@ export function AreaDetalheModal({
   onClose,
 }: {
   area: DespesaPorArea;
-  ano: number;
+  ano: number | null;
   mes?: number | null;
   onClose: () => void;
 }) {
@@ -21,149 +23,79 @@ export function AreaDetalheModal({
     [area.area, ano, mes]
   );
 
-  const porMorador = Math.round(area.total_liquido / POPULACAO_GUARULHOS);
+  useEffect(() => {
+    document.body.classList.add('fg-lock');
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', aoTeclar);
+    return () => {
+      document.body.classList.remove('fg-lock');
+      window.removeEventListener('keydown', aoTeclar);
+    };
+  }, [onClose]);
+
+  const porMorador = Math.round(area.total_liquido / PLATAFORMA.populacao);
   const maxVal = Math.max(...(data?.map((c) => c.total_liquido) ?? [1]), 1);
+  const periodoTxt = ano ? `em ${ano}` : 'em 2025 e 2026';
 
   return (
     <div
+      className="fg-modal"
       role="dialog"
       aria-modal="true"
-      aria-label={`Detalhamento de ${area.area}`}
+      aria-label={`Detalhes da área ${area.area}`}
       onClick={onClose}
-      style={{
-        position: 'fixed',
-        inset: 0,
-        background: 'rgba(9, 21, 43, 0.72)',
-        backdropFilter: 'blur(6px)',
-        zIndex: 1100,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 12,
-      }}
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{
-          background: '#ffffff',
-          borderRadius: 16,
-          width: '100%',
-          maxWidth: 820,
-          maxHeight: '88vh',
-          display: 'flex',
-          flexDirection: 'column',
-          boxShadow: '0 24px 48px rgba(9, 21, 43, 0.35)',
-          overflow: 'hidden',
-          border: '1px solid #cbd5e1',
-        }}
-      >
-        {/* Cabeçalho escuro estilo Crachá Politicômetro */}
-        <div
-          style={{
-            background: 'linear-gradient(135deg, #09152b 0%, #0f2547 100%)',
-            color: '#ffffff',
-            padding: '16px 20px',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'flex-start',
-            gap: 12,
-          }}
-        >
+      <div className="fg-modal__dialog fg-modal__dialog--wide" onClick={(e) => e.stopPropagation()}>
+        <div className="fg-modal__head">
           <div>
             <span className="fg-eyebrow" style={{ marginBottom: 6 }}>
-              {area.icone} RAIO-X COMPLETO DA ÁREA · CONFERIR ATÉ O FIM
+              <IconeArea area={area.area} size={14} />
+              <span>Detalhes da área</span>
             </span>
-            <h2 style={{ fontSize: 'clamp(1.1rem, 2.5vw, 1.4rem)', fontWeight: 800, margin: '4px 0' }}>
-              {area.area}
-            </h2>
-            <p style={{ margin: 0, fontSize: '0.84rem', color: '#cbd5e1', lineHeight: 1.4 }}>
-              {area.explicacao_pratica}
-            </p>
+            <h2 className="fg-modal__title">{area.area}</h2>
+            <p className="fg-modal__sub">{area.explicacao_pratica}</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              background: 'rgba(255,255,255,0.12)',
-              color: '#ffffff',
-              border: '1px solid rgba(255,255,255,0.2)',
-              borderRadius: 8,
-              width: 34,
-              height: 34,
-              fontSize: '1rem',
-              fontWeight: 800,
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
-            aria-label="Fechar janela"
-          >
-            ✕
+          <button type="button" className="fg-modal__close" onClick={onClose} aria-label="Fechar janela">
+            <X size={18} aria-hidden />
           </button>
         </div>
 
-        {/* Faixa de Resumo da Área */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-            gap: 8,
-            padding: '12px 20px',
-            background: '#f8fafc',
-            borderBottom: '1px solid #e2e8f0',
-          }}
-        >
+        <div className="fg-modal__kpis">
           <div>
-            <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>
-              Total Pago na Área
-            </div>
-            <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#09152b' }}>
-              {brlCompacto(area.total_liquido)}
-            </div>
-            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>{brl(area.total_liquido)}</div>
+            <div className="fg-modal__kpi-lbl">Total pago</div>
+            <div className="fg-modal__kpi-val">{brlCompacto(area.total_liquido)}</div>
+            <div className="fg-modal__kpi-hint">{brl(area.total_liquido)}</div>
           </div>
           <div>
-            <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>
-              Custo por Morador
-            </div>
-            <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#059669' }}>
-              R$ {inteiro(porMorador)}
-            </div>
-            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>por habitante em {ano}</div>
+            <div className="fg-modal__kpi-lbl">Por morador</div>
+            <div className="fg-modal__kpi-val fg-modal__kpi-val--green">R$ {inteiro(porMorador)}</div>
+            <div className="fg-modal__kpi-hint">{periodoTxt}</div>
           </div>
           <div>
-            <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>
-              Ordens Bancárias
-            </div>
-            <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#0284c7' }}>
-              {inteiro(area.qtd_pagamentos)}
-            </div>
-            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>pagamentos liquidados</div>
+            <div className="fg-modal__kpi-lbl">Pagamentos</div>
+            <div className="fg-modal__kpi-val fg-modal__kpi-val--blue">{inteiro(area.qtd_pagamentos)}</div>
+            <div className="fg-modal__kpi-hint">pagamentos realizados</div>
           </div>
           <div>
-            <div style={{ fontSize: '0.68rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>
-              Empresas / Órgãos
-            </div>
-            <div style={{ fontSize: '1.15rem', fontWeight: 900, color: '#0f172a' }}>
-              {inteiro(area.qtd_credores)}
-            </div>
-            <div style={{ fontSize: '0.7rem', color: '#64748b' }}>recebedores diferentes</div>
+            <div className="fg-modal__kpi-lbl">Fornecedores</div>
+            <div className="fg-modal__kpi-val">{inteiro(area.qtd_credores)}</div>
+            <div className="fg-modal__kpi-hint">empresas ou órgãos</div>
           </div>
         </div>
 
-        {/* Lista de Quem Recebeu o Dinheiro nesta Área */}
-        <div style={{ padding: '14px 20px', overflowY: 'auto', flex: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-            <strong style={{ fontSize: '0.92rem', color: '#0f172a' }}>
-              🔍 Quem recebeu o dinheiro desta área (toque para ver cada nota de empenho):
-            </strong>
+        <div className="fg-modal__body">
+          <div className="fg-modal__list-head">
+            <strong>Quem mais recebeu nesta área</strong>
             <span className="muted small">Top {data?.length ?? 0} maiores recebedores</span>
           </div>
 
-          {loading && <p className="muted">Buscando todas as empresas e pagamentos desta área...</p>}
-          {error && <p style={{ color: '#dc2626', fontSize: '0.85rem' }}>{error.message}</p>}
+          {loading && <p className="muted">Carregando fornecedores desta área…</p>}
+          {error && <p className="alert alert--error">{error.message}</p>}
 
           {data && (
-            <div style={{ display: 'grid', gap: 8 }}>
+            <div className="fg-modal__list">
               {data.map((c, idx) => {
                 const pctArea = area.total_liquido > 0 ? ((c.total_liquido / area.total_liquido) * 100).toFixed(1) : '0';
                 const largura = Math.max(3, Math.round((c.total_liquido / maxVal) * 100));
@@ -172,61 +104,26 @@ export function AreaDetalheModal({
                     key={c.chave}
                     to={`/despesas/credor/${c.chave}`}
                     onClick={onClose}
-                    style={{
-                      display: 'block',
-                      padding: '10px 12px',
-                      borderRadius: 10,
-                      border: '1px solid #e2e8f0',
-                      background: '#ffffff',
-                      textDecoration: 'none',
-                      color: 'inherit',
-                      transition: 'border-color 0.15s, background 0.15s',
-                    }}
+                    className="fg-modal__item"
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
-                      <div style={{ fontWeight: 800, fontSize: '0.86rem', color: '#0f172a' }}>
+                    <div className="fg-modal__item-top">
+                      <span className="fg-modal__item-name">
                         {idx + 1}. {nomeLegivel(c.credor)}
-                      </div>
-                      <div style={{ fontWeight: 900, fontSize: '0.9rem', color: '#09152b', whiteSpace: 'nowrap' }}>
-                        {brlCompacto(c.total_liquido)}
-                      </div>
+                      </span>
+                      <span className="fg-modal__item-val">{brlCompacto(c.total_liquido)}</span>
                     </div>
 
-                    <div
-                      style={{
-                        height: 5,
-                        borderRadius: 999,
-                        background: '#f1f5f9',
-                        margin: '5px 0',
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: `${largura}%`,
-                          height: '100%',
-                          background: 'linear-gradient(90deg, #0284c7, #38bdf8)',
-                        }}
-                      />
+                    <div className="fg-modal__bar" aria-hidden>
+                      <div className="fg-modal__bar-fill" style={{ width: `${largura}%` }} />
                     </div>
 
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        flexWrap: 'wrap',
-                        gap: 8,
-                        fontSize: '0.74rem',
-                        color: '#64748b',
-                      }}
-                    >
+                    <div className="fg-modal__item-meta">
                       <span>
                         {c.cnpj_credor ? `CNPJ: ${formatarCnpj(c.cnpj_credor)} · ` : ''}
                         {inteiro(c.qtd)} pagamentos · {pctArea}% da área · Último: {dataBr(c.ultimo_pagamento)}
                       </span>
-                      <span style={{ color: '#0284c7', fontWeight: 800 }}>
-                        Ver todos os empenhos e pagamentos →
+                      <span className="fg-modal__item-cta">
+                        Ver pagamentos <ArrowUpRight size={13} aria-hidden />
                       </span>
                     </div>
                   </Link>
@@ -239,4 +136,3 @@ export function AreaDetalheModal({
     </div>
   );
 }
-

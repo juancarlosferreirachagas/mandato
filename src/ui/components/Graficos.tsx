@@ -1,3 +1,4 @@
+import type { CSSProperties } from 'react';
 import { Link } from 'react-router-dom';
 import { mesAbrev, mesNome, brl, brlCompacto } from '../format';
 import type { PontoMensal } from '@/repositories/despesasRepository';
@@ -6,37 +7,58 @@ interface BarrasProps {
   pontos: PontoMensal[];
   /** Mês (1-12) destacado, se houver filtro ativo. */
   selecionado?: number | null;
-  onSelecionar?: (mes: number) => void;
+  onSelecionar?: (mes: number, exercicio?: number) => void;
 }
 
-/** Barras verticais por mês, em CSS puro (sem biblioteca). Valores negativos viram zero na altura. */
+/** Barras verticais por mês, em CSS puro. Suporta série de 1 ano ou multi-ano com scroll horizontal suave. */
 export function BarrasMensais({ pontos, selecionado, onSelecionar }: BarrasProps) {
   if (pontos.length === 0) return <p className="muted">Sem dados para o período.</p>;
   const max = Math.max(...pontos.map((p) => p.total_liquido), 1);
+  const multiAno = new Set(pontos.map((p) => p.exercicio)).size > 1;
 
-  return (
-    <div className="fg-bars" role="img" aria-label="Total pago por mês">
+  const barras = (
+    <div
+      className={`fg-bars${multiAno ? ' fg-bars--multi' : ''}`}
+      style={multiAno ? ({ '--cols': pontos.length } as CSSProperties) : undefined}
+      role="img"
+      aria-label="Total pago por mês"
+    >
       {pontos.map((p) => {
         const alt = Math.max((Math.max(p.total_liquido, 0) / max) * 100, 1.5);
-        const sel = selecionado === p.mes;
+        const sel = selecionado === p.mes && !multiAno;
         const titulo = `${mesNome(p.mes)}/${p.exercicio}: ${brl(p.total_liquido)} · ${p.qtd} pagamentos`;
+        const rotulo = multiAno
+          ? `${mesAbrev(p.mes)}/${String(p.exercicio).slice(2)}`
+          : mesAbrev(p.mes);
         const conteudo = (
           <>
             <span className="fg-bars__val">{brlCompacto(p.total_liquido).replace('R$ ', '')}</span>
             <div className="fg-bars__bar" style={{ height: `${alt}%` }} />
-            <span className="fg-bars__lbl">{mesAbrev(p.mes)}</span>
+            <span className="fg-bars__lbl">{rotulo}</span>
           </>
         );
         const cls = `fg-bars__col${sel ? ' is-sel' : ''}`;
         return onSelecionar ? (
-          <button key={`${p.exercicio}-${p.mes}`} type="button" className={cls} title={titulo}
-            aria-pressed={sel} onClick={() => onSelecionar(p.mes)}>{conteudo}</button>
+          <button
+            key={`${p.exercicio}-${p.mes}`}
+            type="button"
+            className={cls}
+            title={titulo}
+            aria-pressed={sel}
+            onClick={() => onSelecionar(p.mes, p.exercicio)}
+          >
+            {conteudo}
+          </button>
         ) : (
-          <div key={`${p.exercicio}-${p.mes}`} className={cls} title={titulo}>{conteudo}</div>
+          <div key={`${p.exercicio}-${p.mes}`} className={cls} title={titulo}>
+            {conteudo}
+          </div>
         );
       })}
     </div>
   );
+
+  return multiAno ? <div className="fg-bars-scroll">{barras}</div> : barras;
 }
 
 interface HBarProps {

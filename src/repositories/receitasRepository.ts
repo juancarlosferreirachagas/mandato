@@ -3,13 +3,6 @@
  * REPOSITÓRIO DE RECEITAS MUNICIPAIS (TCE-SP AUDESP — GUARULHOS 2025 & 2026)
  * Projeto: Fiscaliza Guarulhos (IBGE 3518800)
  * ============================================================================
- *
- * ARQUITETURA MULTI-EXERCÍCIO (2025 + 2026) COM FAILOVER AUTOMÁTICO:
- * 1. Tenta consultar em tempo real as funções analíticas (RPCs) no Supabase.
- * 2. Faz failover automático para os snapshots oficiais do TCE-SP:
- *    - Exercício 2026: `SNAPSHOT_TCE_GUARULHOS_2026.receitas` (R$ 5,31 bi · 4.056 lançamentos)
- *    - Exercício 2025: `SNAPSHOT_TCE_GUARULHOS_2025.receitas` (R$ 7,24 bi · 5.406 lançamentos)
- * ============================================================================
  */
 
 import { db } from '@/database/client';
@@ -48,8 +41,68 @@ export interface ReceitaFonte {
 
 const num = (v: unknown) => (v === null || v === undefined ? 0 : Number(v));
 
+interface SnapshotReceitasConsolidado {
+  resumo: ResumoReceitas;
+  porMes: ReceitaMes[];
+  arvore: ReceitaLinha[];
+  porFonte: ReceitaFonte[];
+}
+
+let cacheConsolidado: SnapshotReceitasConsolidado | null = null;
+
+function consolidarSnapshotsReceitas(): SnapshotReceitasConsolidado {
+  if (cacheConsolidado) return cacheConsolidado;
+
+  const s25 = SNAPSHOT_TCE_GUARULHOS_2025.receitas;
+  const s26 = SNAPSHOT_TCE_GUARULHOS_2026.receitas;
+
+  const resumo: ResumoReceitas = {
+    total_arrecadado: Math.round((s25.resumo.total_arrecadado + s26.resumo.total_arrecadado) * 100) / 100,
+    total_corrente: Math.round((s25.resumo.total_corrente + s26.resumo.total_corrente) * 100) / 100,
+    total_capital: Math.round((s25.resumo.total_capital + s26.resumo.total_capital) * 100) / 100,
+    total_intra: Math.round((s25.resumo.total_intra + s26.resumo.total_intra) * 100) / 100,
+    qtd_lancamentos: s25.resumo.qtd_lancamentos + s26.resumo.qtd_lancamentos,
+    ultimo_mes: s26.resumo.ultimo_mes,
+  };
+
+  const porMes: ReceitaMes[] = [
+    ...(s25.porMes as ReceitaMes[]),
+    ...(s26.porMes as ReceitaMes[]),
+  ];
+
+  const arvoreMap = new Map<string, ReceitaLinha>();
+  for (const item of [...(s25.arvore as ReceitaLinha[]), ...(s26.arvore as ReceitaLinha[])]) {
+    const chave = `${item.categoria}|${item.subcategoria}|${item.rubrica}`;
+    const atual = arvoreMap.get(chave);
+    if (!atual) {
+      arvoreMap.set(chave, { ...item });
+    } else {
+      atual.total = Math.round((atual.total + item.total) * 100) / 100;
+      atual.qtd += item.qtd;
+    }
+  }
+  const arvore = Array.from(arvoreMap.values()).sort((a, b) => b.total - a.total);
+
+  const fonteMap = new Map<string, ReceitaFonte>();
+  for (const f of [...(s25.porFonte as ReceitaFonte[]), ...(s26.porFonte as ReceitaFonte[])]) {
+    const atual = fonteMap.get(f.fonte_recurso);
+    if (!atual) {
+      fonteMap.set(f.fonte_recurso, { ...f });
+    } else {
+      atual.total = Math.round((atual.total + f.total) * 100) / 100;
+      atual.qtd += f.qtd;
+    }
+  }
+  const porFonte = Array.from(fonteMap.values()).sort((a, b) => b.total - a.total);
+
+  cacheConsolidado = { resumo, porMes, arvore, porFonte };
+  return cacheConsolidado;
+}
+
 function selecionarSnapshotReceitas(ano?: number | null) {
-  return ano === 2025 ? SNAPSHOT_TCE_GUARULHOS_2025.receitas : SNAPSHOT_TCE_GUARULHOS_2026.receitas;
+  if (ano === 2025) return SNAPSHOT_TCE_GUARULHOS_2025.receitas;
+  if (ano === 2026) return SNAPSHOT_TCE_GUARULHOS_2026.receitas;
+  return consolidarSnapshotsReceitas();
 }
 
 async function rpcSafe<T>(nome: string, args: Record<string, unknown>): Promise<T | null> {
@@ -78,7 +131,7 @@ export const receitasRepository = {
     }
 
     const snap = selecionarSnapshotReceitas(ano);
-    if (mes) {
+    if (mes && ano != null) {
       const mObj = (snap.porMes as ReceitaMes[]).find((x) => x.mes === mes);
       const fator = mObj && snap.resumo.total_arrecadado > 0 ? mObj.total_liquido / snap.resumo.total_arrecadado : 1;
       return {
@@ -98,6 +151,9 @@ export const receitasRepository = {
     if (rows && rows.length > 0) {
       return rows.map((r) => ({ ...r, total_liquido: num(r.total_liquido), qtd: num(r.qtd) }));
     }
+    if (ano == null) {
+      return consolidarSnapshotsReceitas().porMes;
+    }
     return selecionarSnapshotReceitas(ano).porMes as ReceitaMes[];
   },
 
@@ -109,7 +165,7 @@ export const receitasRepository = {
 
     const snap = selecionarSnapshotReceitas(ano);
     const base = snap.arvore as ReceitaLinha[];
-    if (!mes) return base;
+    if (!mes || ano == null) return base;
 
     const mObj = (snap.porMes as ReceitaMes[]).find((x) => x.mes === mes);
     const fator = mObj && snap.resumo.total_arrecadado > 0 ? mObj.total_liquido / snap.resumo.total_arrecadado : 1;
@@ -127,7 +183,7 @@ export const receitasRepository = {
 
     const snap = selecionarSnapshotReceitas(ano);
     const base = snap.porFonte as ReceitaFonte[];
-    if (!mes) return base;
+    if (!mes || ano == null) return base;
 
     const mObj = (snap.porMes as ReceitaMes[]).find((x) => x.mes === mes);
     const fator = mObj && snap.resumo.total_arrecadado > 0 ? mObj.total_liquido / snap.resumo.total_arrecadado : 1;

@@ -1,6 +1,24 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { FileText, Vote, ScrollText, Calendar, Users, Briefcase, Mic, Clock, Landmark, Link as LinkIcon } from 'lucide-react';
+import {
+  ArrowLeft,
+  BookOpen,
+  Briefcase,
+  Calendar,
+  CheckCircle2,
+  Clock,
+  ExternalLink,
+  FileText,
+  Info,
+  Landmark,
+  Link as LinkIcon,
+  Mic,
+  Scale,
+  ScrollText,
+  Search,
+  Users,
+  Vote,
+} from 'lucide-react';
 import { perfilService, type PerfilCompleto } from '@/services/perfilService';
 import { abasRepository, type LinhaAba } from '@/repositories/abasRepository';
 import { fonteRepository } from '@/repositories/adminRepositories';
@@ -14,10 +32,12 @@ import {
 } from '@/services/camaraService';
 import { alespService } from '@/services/alespService';
 import { VOTACOES_IMPORTANTES } from '@/domain/votacoesFamosas';
+import { LINKS_OFICIAIS } from '@/domain/plataforma';
 import { formatarData, percentualPresenca, rotuloSituacao } from '@/domain/rules';
 import { useAsync } from '../hooks/useAsync';
 import { EmptyState, ErrorBox, FonteRef, Loading } from '../components/common';
 import { PartyBadge } from '../components/PartyBadge';
+import { nomeLegivel } from '../format';
 
 type TabId =
   | 'geral' | 'votacoes' | 'propostas' | 'presenca' | 'comissoes' | 'frentes'
@@ -132,44 +152,44 @@ function VotacoesAba({ cargoCodigo }: { cargoCodigo?: string }) {
 function classificarTemaProposta(texto: string): { label: string; cor: string; bg: string } {
   const t = texto.toLowerCase();
   if (/(saúde|saude|hospital|ubs|upa|médic|medicamento|maternidade|enferm|vacina|psicol|autis|tea\b|câncer|cancer|samu)/.test(t)) {
-    return { label: '🏥 Saúde & Atendimento', cor: '#b91c1c', bg: '#fee2e2' };
+    return { label: 'Saúde', cor: '#b91c1c', bg: '#fee2e2' };
   }
   if (/(educa|escola|creche|aluno|professor|merenda|infantil|criança|adolescente|juventude|cultura|esporte)/.test(t)) {
-    return { label: '🏫 Educação, Crianças & Cultura', cor: '#6d28d9', bg: '#ede9fe' };
+    return { label: 'Educação e Cultura', cor: '#6d28d9', bg: '#ede9fe' };
   }
   if (/(animal|animais|castração|pet|canil|meio ambiente|ambiental|árvore|parque|ecoponto|resíduo|lixo|saneamento|sabesp|enchente|alagamento|risco)/.test(t)) {
-    return { label: '🌳 Meio Ambiente, Água & Animais', cor: '#15803d', bg: '#dcfce7' };
+    return { label: 'Meio Ambiente e Animais', cor: '#15803d', bg: '#dcfce7' };
   }
   if (/(transporte|ônibus|onibus|trânsito|transito|semáforo|faixa|mobilidade|aeroporto|viária)/.test(t)) {
-    return { label: '🚌 Transporte & Trânsito', cor: '#1d4ed8', bg: '#dbeafe' };
+    return { label: 'Transporte e Trânsito', cor: '#1d4ed8', bg: '#dbeafe' };
   }
   if (/(pavimenta|asfalto|buraco|iluminação|poste|obra|praça|rua |avenida |estrada |zeladoria|moradia|habitação|loteamento|minha casa)/.test(t)) {
-    return { label: '🚧 Obras, Bairros & Moradia', cor: '#b45309', bg: '#fef3c7' };
+    return { label: 'Obras e Bairros', cor: '#b45309', bg: '#fef3c7' };
   }
   if (/(segurança|guarda civil|gcm|polícia|violência|mulher|feminicídio|idoso)/.test(t)) {
-    return { label: '🛡️ Segurança & Direitos', cor: '#334155', bg: '#e2e8f0' };
+    return { label: 'Segurança e Direitos', cor: '#334155', bg: '#e2e8f0' };
   }
-  return { label: '🏛️ Orçamento, Leis & Gestão', cor: '#0369a1', bg: '#e0f2fe' };
+  return { label: 'Orçamento e Gestão', cor: '#0369a1', bg: '#e0f2fe' };
 }
 
 function explicarTipoDocumento(tituloOuBadge: string): string {
   const t = tituloOuBadge.toLowerCase();
   if (t.includes('requerimento de informação')) {
-    return '🔎 Fiscalização: obriga a Prefeitura a responder oficialmente e entregar documentos sobre gastos, obras ou falhas no serviço.';
+    return 'Fiscalização: obriga a Prefeitura a responder oficialmente e entregar documentos sobre gastos, obras ou falhas no serviço.';
   }
   if (t.includes('indicação')) {
-    return '🚧 Pedido de Bairro: solicita à Prefeitura um serviço direto (tapa-buraco, iluminação, limpeza, melhoria em UBS ou linha de ônibus).';
+    return 'Pedido de bairro: solicita à Prefeitura um serviço direto (tapa-buraco, iluminação, limpeza, melhoria em UBS ou linha de ônibus).';
   }
   if (t.includes('projeto de lei') || t.includes('lei orgânica')) {
-    return '📜 Criação de Lei: propõe uma nova regra ou direito permanente para os moradores de Guarulhos (precisa ser votado e aprovado).';
+    return 'Criação de lei: propõe uma nova regra ou direito permanente para os moradores de Guarulhos (precisa ser votado e aprovado).';
   }
   if (t.includes('parecer') || t.includes('relatório') || t.includes('substitutivo')) {
-    return '⚖️ Análise em Comissão: avaliação técnica ou investigação (CEI) assinada pelo parlamentar antes da votação em plenário.';
+    return 'Análise em comissão: avaliação técnica ou investigação (CEI) assinada pelo parlamentar antes da votação em plenário.';
   }
   if (t.includes('moção') || t.includes('decreto legislativo')) {
-    return '🎖️ Reconhecimento Oficial: manifestação formal ou homenagem aprovada pela Câmara Municipal.';
+    return 'Reconhecimento oficial: manifestação formal ou homenagem aprovada pela Câmara Municipal.';
   }
-  return '📄 Atuação legislativa oficial protocolada na Câmara Municipal de Guarulhos.';
+  return 'Atuação oficial protocolada na Câmara Municipal de Guarulhos.';
 }
 
 function explicarAndamentoPasso2(tituloOuBadge: string): { titulo: string; texto: string } {
@@ -282,14 +302,15 @@ function PropostasAba({ pessoaId, camaraId }: { pessoaId: string; camaraId?: num
             lineHeight: 1.5,
           }}
         >
-          <strong style={{ color: '#0369a1', display: 'block', marginBottom: 4 }}>
-            💡 Entenda a diferença na prática e confira “No que deu” cada item:
+          <strong style={{ color: '#0369a1', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+            <Info size={15} aria-hidden />
+            <span>Entenda a diferença na prática e veja o resultado de cada item:</span>
           </strong>
           <span>
             • <strong>Projeto de Lei:</strong> cria uma nova lei na cidade. &nbsp;·&nbsp;{' '}
             <strong>Requerimento de Informação:</strong> fiscaliza e cobra documentos da Prefeitura. &nbsp;·&nbsp;{' '}
             <strong>Indicação:</strong> pede obras, asfalto, luz ou melhorias para um bairro. Toque em{' '}
-            <strong>“🔍 Ver Andamento e No Que Deu”</strong> em qualquer item abaixo para abrir o passo a passo completo.
+            <strong>“Ver andamento”</strong> abaixo para acompanhar cada etapa.
           </span>
         </div>
 
@@ -307,28 +328,28 @@ function PropostasAba({ pessoaId, camaraId }: { pessoaId: string; camaraId?: num
             className={filtroTipo === 'leis' ? 'fg-pill is-active' : 'fg-pill'}
             onClick={() => setFiltroTipo('leis')}
           >
-            📜 Projetos de Lei
+            Projetos de Lei
           </button>
           <button
             type="button"
             className={filtroTipo === 'fiscalizacao' ? 'fg-pill is-active' : 'fg-pill'}
             onClick={() => setFiltroTipo('fiscalizacao')}
           >
-            🔎 Fiscalização / Requerimentos
+            Fiscalização e Requerimentos
           </button>
           <button
             type="button"
             className={filtroTipo === 'bairro' ? 'fg-pill is-active' : 'fg-pill'}
             onClick={() => setFiltroTipo('bairro')}
           >
-            🚧 Pedidos de Bairro (Indicações)
+            Pedidos de Bairro
           </button>
           <button
             type="button"
             className={filtroTipo === 'comissoes' ? 'fg-pill is-active' : 'fg-pill'}
             onClick={() => setFiltroTipo('comissoes')}
           >
-            ⚖️ Pareceres & Outros
+            Pareceres e Outros
           </button>
         </div>
 
@@ -373,22 +394,26 @@ function PropostasAba({ pessoaId, camaraId }: { pessoaId: string; camaraId?: num
                         fontSize: '0.76rem',
                       }}
                     >
-                      📌 No que deu: {situacaoFinal}
+                      {situacaoFinal}
                     </span>
                     <button
                       type="button"
                       className="fg-btn"
                       style={{
                         fontSize: '0.76rem',
-                        padding: '4px 10px',
-                        fontWeight: 800,
-                        background: isExpandida ? '#0284c7' : '#f0f9ff',
-                        color: isExpandida ? '#ffffff' : '#0284c7',
-                        borderColor: '#0284c7',
+                        padding: '5px 10px',
+                        fontWeight: 700,
+                        background: isExpandida ? '#1e5fa8' : '#eff6ff',
+                        color: isExpandida ? '#ffffff' : '#1e5fa8',
+                        borderColor: '#1e5fa8',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
                       }}
                       onClick={() => setExpandidaId(isExpandida ? '__none__' : r.id)}
                     >
-                      {isExpandida ? '▲ Ocultar Andamento' : '🔍 Ver Andamento e No Que Deu'}
+                      <Search size={13} aria-hidden />
+                      <span>{isExpandida ? 'Ocultar andamento' : 'Ver andamento'}</span>
                     </button>
                   </div>
                 </div>
@@ -426,7 +451,7 @@ function PropostasAba({ pessoaId, camaraId }: { pessoaId: string; camaraId?: num
                     }}
                   >
                     <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#0369a1', textTransform: 'uppercase' }}>
-                      🔎 Acompanhamento até o fim — O que aconteceu com esta atuação:
+                      Acompanhamento — o que aconteceu com esta proposta
                     </div>
                     <div
                       style={{
@@ -458,8 +483,9 @@ function PropostasAba({ pessoaId, camaraId }: { pessoaId: string; camaraId?: num
                         <div style={{ fontSize: '0.73rem', fontWeight: 800, color: '#047857' }}>
                           3º SITUAÇÃO ATUAL (“NO QUE DEU”)
                         </div>
-                        <div style={{ fontWeight: 800, fontSize: '0.88rem', color: '#047857', marginTop: 2 }}>
-                          ✓ {situacaoFinal}
+                        <div style={{ fontWeight: 800, fontSize: '0.88rem', color: '#047857', marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <CheckCircle2 size={14} aria-hidden />
+                          <span>{situacaoFinal}</span>
                         </div>
                         <div style={{ fontSize: '0.74rem', color: '#475569', marginTop: 2 }}>
                           Registro auditado na Câmara Municipal de Guarulhos.
@@ -474,10 +500,15 @@ function PropostasAba({ pessoaId, camaraId }: { pessoaId: string; camaraId?: num
                           href={linkRealDocumento}
                           target="_blank"
                           rel="noreferrer noopener"
-                          className="fg-link"
+                          className="fg-link-inline"
                           style={{ fontSize: '0.8rem' }}
                         >
-                          Abrir inteiro teor na Câmara de Guarulhos ↗
+                          <span>
+                            {linkRealDocumento.includes('diariooficial.guarulhos')
+                              ? 'Abrir Lei no PDF do Diário Oficial'
+                              : 'Abrir documento na Câmara'}
+                          </span>
+                          <ExternalLink size={13} aria-hidden />
                         </a>
                       )}
                     </div>
@@ -493,8 +524,25 @@ function PropostasAba({ pessoaId, camaraId }: { pessoaId: string; camaraId?: num
 
   return (
     <div className="empty-box">
-      <div className="empty-box__title">Nenhuma proposta registrada</div>
-      <p className="empty-box__text">Ainda não constam projetos importados ou registrados para este mandato.</p>
+      <div className="empty-box__title">Consulta direta de proposições em tramitação</div>
+      <p className="empty-box__text">
+        Não foram localizadas leis sancionadas com autoria nominal direta no catálogo atual, mas você pode consultar
+        todas as indicações, requerimentos e projetos em tramitação diretamente no portal legislativo oficial.
+      </p>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap', marginTop: 12 }}>
+        <a
+          href={LINKS_OFICIAIS.camaraAtividade}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="fg-btn fg-btn--primary fg-btn--sm"
+        >
+          <span>Consultar proposições na Câmara</span>
+          <ExternalLink size={13} aria-hidden />
+        </a>
+        <Link to="/decretos?aba=diarios" className="fg-btn fg-btn--sm">
+          <span>Ver 197 Leis Sancionadas no Diário</span>
+        </Link>
+      </div>
     </div>
   );
 }
@@ -506,16 +554,26 @@ function PresencaAba({ perfil }: { perfil: PerfilCompleto }) {
   if (res.error) return <ErrorBox error={res.error} />;
 
   const metricas = res.data?.[0]?.metricas;
-  const sessoesRegistradas = metricas?.sessoes_registradas || 120;
-  const sessoesPresente = metricas?.sessoes_presente || 114;
+  const sessoesRegistradas = metricas?.sessoes_registradas ?? 0;
+  const sessoesPresente = metricas?.sessoes_presente ?? 0;
+
+  if (!sessoesRegistradas) {
+    return (
+      <EmptyState title="Frequência ainda não disponibilizada">
+        Os registros individuais de presença em plenário ainda não foram liberados pela casa legislativa para este
+        mandato.
+      </EmptyState>
+    );
+  }
+
   const percentual = ((sessoesPresente / sessoesRegistradas) * 100).toFixed(1);
 
   return (
     <div>
       <div className="camara-api-banner">
         <div>
-          <strong>Registro de Frequência e Sessões Deliberativas</strong>
-          <div className="muted small">Controle de presença oficial em plenário e reuniões obrigatórias.</div>
+          <strong>Registro de frequência em sessões</strong>
+          <div className="muted small">Controle oficial de presença em plenário.</div>
         </div>
         <span className="fonte-badge">Regimento Interno</span>
       </div>
@@ -525,33 +583,33 @@ function PresencaAba({ perfil }: { perfil: PerfilCompleto }) {
           <div className="metric-card__value" style={{ color: 'var(--status-success-text)' }}>
             {percentual}%
           </div>
-          <div className="metric-card__label">Índice de Presença</div>
-          <div className="metric-card__hint">Acima da média exigida</div>
+          <div className="metric-card__label">Índice de presença</div>
         </div>
 
         <div className="metric-card">
           <div className="metric-card__value">{sessoesPresente}</div>
-          <div className="metric-card__label">Dias com Presença Confirmada</div>
-          <div className="metric-card__hint">Sessões em plenário</div>
+          <div className="metric-card__label">Sessões com presença</div>
         </div>
 
         <div className="metric-card">
-          <div className="metric-card__value">{sessoesRegistradas - sessoesPresente}</div>
-          <div className="metric-card__label">Ausências Justificadas / Licenças</div>
-          <div className="metric-card__hint">Com base em atestados oficiais</div>
+          <div className="metric-card__value">{Math.max(0, sessoesRegistradas - sessoesPresente)}</div>
+          <div className="metric-card__label">Ausências ou licenças</div>
         </div>
 
         <div className="metric-card">
           <div className="metric-card__value">{sessoesRegistradas}</div>
-          <div className="metric-card__label">Total de Sessões Convocadas</div>
-          <div className="metric-card__hint">Mandato 2023 - 2026</div>
+          <div className="metric-card__label">Total de sessões</div>
         </div>
       </div>
 
       <article style={{ background: '#f8fafc', border: '1px solid var(--border-light)', borderRadius: 'var(--radius-md)', padding: '16px', fontSize: '0.88rem', color: 'var(--text-body)' }}>
-        <strong>💡 Como funciona o registro de presença?</strong>
+        <strong style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <Info size={15} aria-hidden />
+          <span>Como funciona o registro de presença?</span>
+        </strong>
         <p style={{ marginTop: '4px', lineHeight: 1.5 }}>
-          Os parlamentares têm a obrigação constitucional de registrar presença biometricamente ou por sistema eletrônico no início e durante cada ordem do dia de votações. Faltas não justificadas resultam em desconto em folha e notificação formal pela Mesa Diretora.
+          Os parlamentares registram presença eletronicamente no início e durante as sessões de votação. Faltas não
+          justificadas resultam em desconto em folha.
         </p>
       </article>
     </div>
@@ -795,8 +853,9 @@ function MetricasGeral({
                 lineHeight: 1.65,
               }}
             >
-              <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '8px' }}>
-                📖 Biografia Completa e Trajetória Oficial
+              <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <BookOpen size={17} aria-hidden />
+                <span>Biografia e trajetória</span>
               </h3>
               <div style={{ display: 'grid', gap: 8 }}>
                 {biografia
@@ -823,13 +882,14 @@ function MetricasGeral({
               lineHeight: 1.5,
             }}
           >
-            <strong style={{ color: '#0369a1', display: 'block', marginBottom: 4 }}>
-              💡 O que este cargo faz na prática pelo seu bairro?
+            <strong style={{ color: '#0369a1', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+              <Info size={15} aria-hidden />
+              <span>O que este cargo faz na prática pelo seu bairro?</span>
             </strong>
             {cargoCodigo === 'prefeito' || cargoCodigo === 'vice_prefeito' ? (
               <span>
-                O <strong>Prefeito e o Vice-Prefeito (Poder Executivo)</strong> administram diretamente os{' '}
-                <strong>R$ 5,74 bilhões arrecadados</strong> pela cidade: comandam as Secretarias (Saúde, Educação, Obras,
+                O <strong>Prefeito e o Vice-Prefeito (Poder Executivo)</strong> administram o orçamento anual da cidade
+                (bilhões de reais por ano em impostos e repasses): comandam as Secretarias (Saúde, Educação, Obras,
                 Transporte), contratam fornecedores, pagam os servidores e executam as obras e serviços nos bairros.
               </span>
             ) : (
@@ -853,8 +913,9 @@ function MetricasGeral({
               alignSelf: 'start',
             }}
           >
-            <h3 style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: 10 }}>
-              ⚖️ Comissões e Frentes na Câmara ({comissoesLocais.length})
+            <h3 style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--text-main)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Scale size={17} aria-hidden />
+              <span>Comissões e Frentes na Câmara ({comissoesLocais.length})</span>
             </h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 8 }}>
               {comissoesLocais.map((c, idx) => (
@@ -899,17 +960,21 @@ function MetricasGeral({
                   type="button"
                   onClick={onIrParaPropostas}
                   style={{
-                    background: '#0284c7',
+                    background: '#1e5fa8',
                     color: '#ffffff',
                     border: 'none',
                     borderRadius: 8,
-                    padding: '7px 14px',
-                    fontWeight: 800,
-                    fontSize: '0.8rem',
+                    padding: '8px 14px',
+                    fontWeight: 700,
+                    fontSize: '0.82rem',
                     cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6,
                   }}
                 >
-                  📜 Ver Projetos, Fiscalizações e “No Que Deu” ({metricas?.projetos_apresentados}) →
+                  <ScrollText size={15} aria-hidden />
+                  <span>Ver projetos e fiscalizações ({metricas?.projetos_apresentados}) →</span>
                 </button>
               )}
             </div>
@@ -992,8 +1057,11 @@ function FontesAba({ perfil, camaraId, alespId, camaraGruUrl, tseUrl }: { perfil
     <div>
       <div className="camara-api-banner">
         <div>
-          <strong>🔗 Fontes e APIs Oficiais Abertas</strong>
-          <div className="muted small">Princípio Fato → Fonte. Todas as informações podem ser checadas nos órgãos oficiais.</div>
+          <strong style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <LinkIcon size={15} aria-hidden />
+            <span>Fontes oficiais</span>
+          </strong>
+          <div className="muted small">Todas as informações deste perfil podem ser conferidas nos portais oficiais.</div>
         </div>
       </div>
 
@@ -1082,7 +1150,7 @@ function FontesAba({ perfil, camaraId, alespId, camaraGruUrl, tseUrl }: { perfil
           const urlLimpa =
             f.url && !f.url.includes('/api/json/') && !f.url.includes('dadosabertos.camara.leg.br/api')
               ? f.url
-              : 'https://www.guarulhos.sp.leg.br';
+              : LINKS_OFICIAIS.camara;
           return (
             <li key={f.id} className="data-row">
               <div className="data-row__main">
@@ -1105,7 +1173,12 @@ function FontesAba({ perfil, camaraId, alespId, camaraGruUrl, tseUrl }: { perfil
 export function PerfilPage() {
   const { id = '' } = useParams();
   const [tab, setTab] = useState<TabId>('geral');
+  const [fotoErro, setFotoErro] = useState(false);
   const res = useAsync(() => perfilService.carregar(id), [id]);
+
+  useEffect(() => {
+    setFotoErro(false);
+  }, [id]);
 
   const p = res.data;
   const identificadores = (p?.pessoa?.identificadores_externos || {}) as Record<string, any>;
@@ -1153,7 +1226,8 @@ export function PerfilPage() {
   const eleita = p.candidaturas
     .filter((c) => c.resultado?.startsWith('eleito'))
     .sort((a, b) => (b.eleicao?.ano ?? 0) - (a.eleicao?.ano ?? 0))[0];
-  const nome = p.pessoa.nome_politico ?? p.pessoa.nome_civil;
+  const rawNome = p.pessoa.nome_politico ?? p.pessoa.nome_civil;
+  const nome = nomeLegivel(rawNome.replace(/\s+/g, ' '));
   const detalheCamara = resCamaraDetalhe.data;
   const gabinete = detalheCamara?.ultimoStatus?.gabinete;
   const profissao = resProfissoes.data?.[0]?.titulo ?? ocupacaoExt;
@@ -1162,24 +1236,32 @@ export function PerfilPage() {
   return (
     <>
       <div style={{ marginBottom: '16px' }}>
-        <Link to="/politicos" className="btn btn--ghost" style={{ padding: '6px 12px', fontSize: '0.82rem' }}>
-          ← Voltar para a lista de representantes
+        <Link to="/politicos" className="btn btn--ghost" style={{ padding: '6px 12px', fontSize: '0.82rem', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <ArrowLeft size={15} aria-hidden />
+          <span>Voltar para a lista</span>
         </Link>
       </div>
 
       {/* Header do Perfil Responsivo com Foto em Destaque */}
       <header className="profile-hero">
         <div className="profile-hero__photo-wrapper">
-          {p.pessoa.foto_url ? (
+          {p.pessoa.foto_url && !fotoErro ? (
             <img
               className="profile-hero__photo"
               src={p.pessoa.foto_url}
               alt={`Foto oficial de ${nome}`}
               referrerPolicy="no-referrer"
+              onError={() => setFotoErro(true)}
             />
           ) : (
             <div className="politico-card__photo-fallback" style={{ width: '100%', height: '100%', borderRadius: 0 }}>
-              {nome.charAt(0)}
+              {nome
+                .split(' ')
+                .filter(Boolean)
+                .slice(0, 2)
+                .map((parte) => parte[0])
+                .join('')
+                .toUpperCase()}
             </div>
           )}
         </div>
@@ -1239,7 +1321,9 @@ export function PerfilPage() {
               )}
               {camaraGruUrl && (
                 <a href={camaraGruUrl} target="_blank" rel="noreferrer noopener" style={{ fontWeight: 700, color: 'var(--text-main)', textDecoration: 'underline', marginLeft: 'auto' }}>
-                  Página oficial na Câmara de Guarulhos ↗
+                  {atual?.cargo?.codigo === 'prefeito' || atual?.cargo?.codigo === 'vice_prefeito'
+                    ? 'Portal oficial da Prefeitura de Guarulhos ↗'
+                    : 'Página oficial na Câmara de Guarulhos ↗'}
                 </a>
               )}
             </div>

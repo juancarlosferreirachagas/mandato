@@ -1,22 +1,18 @@
 /**
  * ============================================================================
- * PÁGINA: CENTRAL DE FONTES VALIDADAS EM TEMPO REAL & LOGS DE AUDITORIA
+ * PÁGINA: FONTES DOS DADOS
  * Rota: /fontes
- * Projeto: Fiscaliza Guarulhos (IBGE 3518800)
  * ============================================================================
  *
- * OBJETIVO ARQUITETURAL:
- * Centraliza a validação em tempo real de todas as fontes primárias que
- * abastecem o Fiscaliza Guarulhos (TCE-SP Audesp, Diário Oficial DOM-GRU,
- * Câmara Municipal, TSE e IBGE), exibindo latência real de banco, checksums
- * SHA-256, diários extraídos e o histórico de execuções do pipeline ETL.
+ * Explica, em linguagem simples, de onde vem cada informação do site, até que
+ * data ela vai e como abrir o original no portal oficial. Também mostra o
+ * histórico de atualizações da base de pagamentos (TCE-SP).
  * ============================================================================
  */
 
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  Activity,
   ArrowRightLeft,
   ArrowUpRight,
   BookOpen,
@@ -28,292 +24,180 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import { despesasRepository } from '@/repositories/despesasRepository';
-import { DIARIOS_OFICIAIS_EXTRAIDOS } from '@/domain/decretosOrcamentarios';
 import { verificarFontesEmTempoReal } from '@/services/auditoriaTempoRealService';
+import {
+  QTD_DECRETOS,
+  QTD_DIARIOS,
+  QTD_DIARIOS_EXECUTIVO,
+  QTD_DIARIOS_LEGISLATIVO,
+  QTD_LEIS_SANCIONADAS,
+} from '@/domain/plataforma';
 import { useAsync } from '../hooks/useAsync';
 import { EmptyState, ErrorBox, Loading } from '../components/common';
-import { brlCompacto, dataBr, dataHoraBr, inteiro } from '../format';
+import { dataBr, dataHoraBr, inteiro } from '../format';
 import type { Secao } from '../navigation';
 
 export function SecaoPage({ secao }: { secao: Secao }) {
-  // Gatilho para reexecutar o ping e validação das fontes ao vivo
-  const [cicloPing, setCicloPing] = useState(0);
+  // Muda a cada clique em "Verificar agora" para refazer as consultas
+  const [ciclo, setCiclo] = useState(0);
 
-  // Busca em paralelo o histórico de coletas do Supabase e o diagnóstico em tempo real
   const { data: coletas, loading: loadingColetas, error } = useAsync(
     () => despesasRepository.coletasRecentes(20),
-    [cicloPing]
+    [ciclo],
   );
-  const { data: telemetria, loading: loadingTelemetria } = useAsync(
-    () => verificarFontesEmTempoReal(2026),
-    [cicloPing]
-  );
+  const { data: telemetria, loading: verificando } = useAsync(() => verificarFontesEmTempoReal(2026), [ciclo]);
 
   return (
     <div className="fg-page-container">
-      {/* ====================================================================
-          CABEÇALHO DE VALIDAÇÃO EM TEMPO REAL
-          ==================================================================== */}
-      <header className="fg-hero" style={{ padding: '26px 24px', marginBottom: 20 }}>
+      {/* ===== Cabeçalho ===== */}
+      <header className="fg-hero" style={{ marginBottom: 20 }}>
         <div className="fg-hero-split">
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <span className="fg-hero__eyebrow">
-                <span className="fg-hero__dot" />
-                AUDITORIA EM TEMPO REAL · FATO → FONTE → DADOS VERIFICADOS
-              </span>
-              <span
-                className="fg-badge"
-                style={{
-                  background: 'rgba(16, 185, 129, 0.2)',
-                  color: '#6ee7b7',
-                  border: '1px solid rgba(16, 185, 129, 0.4)',
-                }}
-              >
-                <Activity size={13} />
-                {loadingTelemetria
-                  ? 'Aferindo latência...'
-                  : `6/6 Fontes Validadas · ${telemetria?.latenciaMediaMs ?? 22} ms`}
-              </span>
-            </div>
+            <span className="fg-hero__eyebrow">
+              <span className="fg-hero__dot" />
+              De onde vêm os dados
+            </span>
 
-            <h1 className="fg-hero__title" style={{ marginTop: 10 }}>
-              {secao.label} &amp; <span>Validação em Tempo Real</span>
+            <h1 className="fg-hero__title">
+              {secao.label} dos dados de <span>Guarulhos</span>
             </h1>
-            <p className="fg-hero__lead" style={{ marginTop: 8 }}>
-              Todas as fontes de dados do <strong>Fiscaliza Guarulhos</strong> são públicas, oficiais e monitoradas em
-              tempo real. Nenhum número é estimado: cada pagamento, receita, decreto do Diário Oficial e projeto de lei
-              possui trilha de auditoria verificável.
+            <p className="fg-hero__lead">
+              Tudo o que você vê neste site vem de bases públicas e oficiais. Aqui você confere cada fonte, até que data
+              ela vai e como abrir o original no portal do órgão responsável.
             </p>
 
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 16 }}>
-              <button
-                type="button"
-                onClick={() => setCicloPing((c) => c + 1)}
-                disabled={loadingTelemetria}
-                className="fg-btn-audit-live"
-              >
-                <RefreshCw size={15} className={loadingTelemetria ? 'fg-spin' : ''} />
-                <span>
-                  {loadingTelemetria ? 'Validando Bases...' : 'Executar Validação em Tempo Real'}
-                </span>
+            <div className="fg-hero__actions">
+              <button type="button" onClick={() => setCiclo((c) => c + 1)} disabled={verificando} className="fg-btn-audit-live">
+                <RefreshCw size={15} className={verificando ? 'fg-spin' : ''} aria-hidden />
+                <span>{verificando ? 'Verificando…' : 'Verificar agora'}</span>
               </button>
-
               <Link to="/decretos" className="fg-btn-audit-ghost">
-                <ArrowRightLeft size={15} />
-                <span>Ver Decretos Explicados (De Onde Saiu → Para Onde Foi)</span>
+                <ArrowRightLeft size={15} aria-hidden />
+                <span>Entender os decretos</span>
               </Link>
             </div>
           </div>
 
-          {/* Resumo da Telemetria em Tempo Real */}
           <div className="fg-hero-kpis">
             <div className="fg-hero-kpi">
-              <div className="fg-hero-kpi__lbl">Fontes Homologadas</div>
-              <div className="fg-hero-kpi__val fg-hero-kpi__val--emerald">6 / 6</div>
-              <div className="fg-hero-kpi__sub">100% Online e Conciliadas</div>
+              <div className="fg-hero-kpi__lbl">Fontes oficiais</div>
+              <div className="fg-hero-kpi__val fg-hero-kpi__val--emerald">{telemetria ? telemetria.fontes.length : '…'}</div>
+              <div className="fg-hero-kpi__sub">TCE-SP, Diário Oficial, Câmara, TSE e IBGE</div>
             </div>
-
             <div className="fg-hero-kpi">
-              <div className="fg-hero-kpi__lbl">Registros Auditados</div>
+              <div className="fg-hero-kpi__lbl">Registros na base</div>
               <div className="fg-hero-kpi__val fg-hero-kpi__val--amber">
-                {telemetria ? inteiro(telemetria.totalRegistrosAuditados) : '...'}
+                {telemetria ? inteiro(telemetria.totalRegistrosAuditados) : '…'}
               </div>
-              <div className="fg-hero-kpi__sub">Linhas verificadas no banco</div>
+              <div className="fg-hero-kpi__sub">Pagamentos, receitas, decretos e mandatos</div>
             </div>
-
             <div className="fg-hero-kpi">
-              <div className="fg-hero-kpi__lbl">Latência Analítica</div>
+              <div className="fg-hero-kpi__lbl">Tempo de resposta</div>
               <div className="fg-hero-kpi__val fg-hero-kpi__val--sky">
-                {telemetria ? `${telemetria.latenciaMediaMs} ms` : '...'}
+                {telemetria ? `${telemetria.latenciaMediaMs} ms` : '…'}
               </div>
-              <div className="fg-hero-kpi__sub">Resposta RPC PostgreSQL</div>
+              <div className="fg-hero-kpi__sub">Média nesta consulta</div>
             </div>
-
             <div className="fg-hero-kpi">
-              <div className="fg-hero-kpi__lbl">Decretos &amp; Diários</div>
-              <div className="fg-hero-kpi__val">
-                {telemetria ? brlCompacto(telemetria.totalDecretosAuditados) : 'R$ 144,9 mi'}
+              <div className="fg-hero-kpi__lbl">Diários validados</div>
+              <div className="fg-hero-kpi__val">{QTD_DIARIOS}</div>
+              <div className="fg-hero-kpi__sub">
+                {QTD_DIARIOS_EXECUTIVO} Executivo · {QTD_DIARIOS_LEGISLATIVO} Legislativo · {QTD_DECRETOS} decretos
               </div>
-              <div className="fg-hero-kpi__sub">{DIARIOS_OFICIAIS_EXTRAIDOS.length} edições DOM-GRU extraídas</div>
             </div>
           </div>
         </div>
       </header>
 
-      {/* ====================================================================
-          GRADE DAS 6 FONTES OFICIAIS VALIDADAS EM TEMPO REAL
-          ==================================================================== */}
+      {/* ===== Fontes ===== */}
       <section className="fg-section" style={{ marginTop: 0 }}>
         <div className="fg-section__head">
           <div>
-            <h2 className="fg-h2">Status em Tempo Real das Fontes Oficiais de Guarulhos</h2>
-            <p className="fg-sub">
-              Verificação direta de integridade, protocolo de extração, hash SHA-256 e links para os portais públicos:
-            </p>
+            <h2 className="fg-h2">As fontes que usamos</h2>
+            <p className="fg-sub">Cada cartão mostra o que a fonte traz e leva ao site oficial para você conferir.</p>
           </div>
           {telemetria && (
             <span className="fg-badge fg-badge--emerald">
-              <CheckCircle2 size={13} />
-              Última aferição: {dataHoraBr(telemetria.verificadoEmIso)}
+              <CheckCircle2 size={13} aria-hidden />
+              Consultado em {dataHoraBr(telemetria.verificadoEmIso)}
             </span>
           )}
         </div>
 
         <div className="fg-grid-2">
           {telemetria?.fontes.map((f) => (
-            <article
-              key={f.id}
-              className="fg-card"
-              style={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 14 }}
-            >
-              <div>
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: 8,
-                    flexWrap: 'wrap',
-                  }}
-                >
-                  <span className="fg-badge fg-badge--navy">
-                    <Database size={12} />
-                    {f.sigla}
-                  </span>
-                  <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                    <span className="fg-badge fg-badge--emerald">
-                      <CheckCircle2 size={12} />
-                      Validada ({f.latenciaMs} ms)
-                    </span>
-                  </div>
-                </div>
-
-                <h3 style={{ fontSize: '1.02rem', fontWeight: 800, color: '#09152b', marginTop: 10 }}>
-                  {f.nomeOficial}
-                </h3>
-                <div style={{ fontSize: '0.82rem', fontWeight: 700, color: '#0284c7', marginTop: 4 }}>
-                  {f.escopoAuditado}
-                </div>
-                <p style={{ fontSize: '0.84rem', color: '#475569', lineHeight: 1.5, marginTop: 8 }}>
-                  {f.descricaoTecnica}
-                </p>
-
-                <div
-                  style={{
-                    marginTop: 10,
-                    paddingTop: 8,
-                    borderTop: '1px dashed var(--fg-border)',
-                    fontSize: '0.75rem',
-                    color: '#64748b',
-                    display: 'grid',
-                    gap: 2,
-                  }}
-                >
-                  <div>
-                    <strong>Protocolo:</strong> {f.protocoloExtracao}
-                  </div>
-                  <div style={{ fontFamily: 'var(--font-mono)' }}>
-                    <strong>Checksum:</strong> {f.hashAuditoria.slice(0, 42)}
-                  </div>
-                </div>
-              </div>
-
-              <div
-                style={{
-                  paddingTop: 10,
-                  borderTop: '1px solid var(--fg-border-light)',
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  flexWrap: 'wrap',
-                  gap: 8,
-                }}
-              >
-                <span style={{ fontSize: '0.75rem', color: '#64748b', fontWeight: 600 }}>
-                  Competência base: <strong>{dataBr(f.ultimaDataBase)}</strong>
+            <article key={f.id} className="fg-card fg-fonte">
+              <div className="fg-fonte__top">
+                <span className="fg-badge fg-badge--navy">
+                  <Database size={12} aria-hidden />
+                  {f.sigla}
                 </span>
-                <a
-                  href={f.portalHumanoUrl}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="fg-link-inline"
-                >
-                  <span>{f.portalHumanoLabel}</span>
-                  <ExternalLink size={13} />
-                </a>
+                <span className="fg-badge fg-badge--emerald">
+                  <CheckCircle2 size={12} aria-hidden />
+                  Carregada · {f.latenciaMs} ms
+                </span>
               </div>
+
+              <h3 className="fg-fonte__title">{f.nomeOficial}</h3>
+              <div className="fg-fonte__scope">{f.escopoAuditado}</div>
+              <p className="fg-fonte__desc">{f.descricaoTecnica}</p>
+
+              <dl className="fg-fonte__meta">
+                <div>
+                  <dt>Dados até</dt>
+                  <dd>{dataBr(f.ultimaDataBase)}</dd>
+                </div>
+                <div>
+                  <dt>Como obtemos</dt>
+                  <dd>{f.protocoloExtracao}</dd>
+                </div>
+              </dl>
+
+              <a href={f.portalHumanoUrl} target="_blank" rel="noreferrer noopener" className="fg-link-inline fg-fonte__link">
+                <span>{f.portalHumanoLabel.replace(/\s*↗\s*$/, '')}</span>
+                <ExternalLink size={13} aria-hidden />
+              </a>
             </article>
           ))}
+          {verificando && !telemetria && <Loading label="Consultando as fontes…" />}
         </div>
       </section>
 
-      {/* ====================================================================
-          ATALHO DIRETO PARA OS DIÁRIOS OFICIAIS EXTRAÍDOS & DECRETOS
-          ==================================================================== */}
+      {/* ===== Atalho para decretos ===== */}
       <section className="fg-section">
-        <div className="fg-card" style={{ borderLeft: '4px solid var(--gru-red)' }}>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: 14,
-            }}
-          >
-            <div style={{ maxWidth: 740 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <span className="fg-badge fg-badge--navy">
-                  <BookOpen size={12} />
-                  DIÁRIO OFICIAL DE GUARULHOS (DOM-GRU)
-                </span>
-                <span className="fg-badge fg-badge--amber">Rastreabilidade Lei 4.320/1964</span>
-              </div>
-              <h2 className="fg-h2">
-                Decretos Orçamentários Explicados: De Onde Saiu e Para Onde Foi
-              </h2>
-              <p className="fg-sub" style={{ fontSize: '0.86rem', marginTop: 4, lineHeight: 1.5 }}>
-                Consulte todas as edições extraídas do Diário Oficial de Guarulhos e veja a abertura de créditos
-                adicionais suplementares, anulações de dotações e remanejamentos entre secretarias explicados sem
-                economês.
-              </p>
+        <div className="fg-card fg-fonte-cta">
+          <div style={{ maxWidth: 740 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+              <span className="fg-badge fg-badge--navy">
+                <BookOpen size={12} aria-hidden />
+                Diário Oficial de Guarulhos
+              </span>
             </div>
-
-            <Link
-              to="/decretos"
-              className="fg-btn fg-btn--primary"
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                textDecoration: 'none',
-                padding: '10px 18px',
-              }}
-            >
-              <FileCheck2 size={16} />
-              <span>Abrir Auditoria de Decretos &amp; Diários</span>
-              <ArrowUpRight size={15} />
-            </Link>
+            <h2 className="fg-h2">Quebra-cabeça completo: Diários Executivo + Legislativo, {QTD_LEIS_SANCIONADAS} leis e {QTD_DECRETOS} decretos</h2>
+            <p className="fg-sub" style={{ fontSize: '0.88rem', marginTop: 4, lineHeight: 1.55 }}>
+              Cruze cada edição do Diário do Executivo (validada com SHA-256) e do Diário do Legislativo (Câmara) com as
+              leis sancionadas, os decretos que remanejam verbas e os pagamentos reais no TCE-SP.
+            </p>
           </div>
+          <Link to="/decretos?aba=quebra-cabeca" className="fg-btn fg-btn--primary fg-fonte-cta__btn">
+            <FileCheck2 size={16} aria-hidden />
+            <span>Abrir central de diários</span>
+            <ArrowUpRight size={15} aria-hidden />
+          </Link>
         </div>
       </section>
 
-      {/* ====================================================================
-          HISTÓRICO DE SINCRONIZAÇÕES AUTOMÁTICAS (TCE-SP / AUDESP)
-          ==================================================================== */}
+      {/* ===== Histórico de atualizações ===== */}
       <section className="fg-section">
         <div className="fg-section__head">
           <div>
-            <h2 className="fg-h2">Log de Sincronizações Automáticas (TCE-SP / Audesp)</h2>
-            <p className="fg-sub">
-              Registro auditável das execuções do pipeline de coleta de despesas e receitas municipais:
-            </p>
+            <h2 className="fg-h2">Histórico de atualizações dos pagamentos</h2>
+            <p className="fg-sub">Cada linha é uma carga de dados do TCE-SP feita na nossa base.</p>
           </div>
         </div>
 
         {error && <ErrorBox error={error} />}
-        {loadingColetas && !coletas && <Loading label="Carregando histórico de auditoria..." />}
+        {loadingColetas && !coletas && <Loading label="Carregando histórico…" />}
 
         {coletas && coletas.length > 0 && (
           <div className="fg-table-wrap">
@@ -321,32 +205,30 @@ export function SecaoPage({ secao }: { secao: Secao }) {
               <table className="fg-table fg-table--cards">
                 <thead>
                   <tr>
-                    <th>Competência</th>
-                    <th>Fonte Oficial</th>
-                    <th>Data da Execução</th>
-                    <th className="num">Registros Processados</th>
-                    <th>Status de Validação</th>
+                    <th>Mês de referência</th>
+                    <th>Fonte</th>
+                    <th>Atualizado em</th>
+                    <th className="num">Registros</th>
+                    <th>Situação</th>
                   </tr>
                 </thead>
                 <tbody>
                   {coletas.map((c) => (
                     <tr key={c.id}>
-                      <td data-label="Competência" style={{ fontWeight: 800, fontFamily: 'var(--font-mono)' }}>
+                      <td data-label="Mês" style={{ fontWeight: 800, fontFamily: 'var(--font-mono)' }}>
                         {c.mes ? `${String(c.mes).padStart(2, '0')}/${c.exercicio}` : String(c.exercicio ?? '2026')}
                       </td>
                       <td data-label="Fonte">
                         <span className="fg-tag">{c.fonte || 'TCE-SP · Audesp Guarulhos'}</span>
                       </td>
-                      <td data-label="Data da Coleta">{dataBr(c.executado_em?.slice(0, 10))}</td>
-                      <td data-label="Registros Auditados" className="num" style={{ fontFamily: 'var(--font-mono)' }}>
+                      <td data-label="Atualizado em">{dataBr(c.executado_em?.slice(0, 10))}</td>
+                      <td data-label="Registros" className="num" style={{ fontFamily: 'var(--font-mono)' }}>
                         {inteiro(c.linhas)}
                       </td>
-                      <td data-label="Status">
-                        <span
-                          className={`fg-badge ${c.status === 'ok' ? 'fg-badge--emerald' : 'fg-badge--amber'}`}
-                        >
-                          <ShieldCheck size={12} />
-                          {c.status === 'ok' ? 'Validado & Gravado' : c.status}
+                      <td data-label="Situação">
+                        <span className={`fg-badge ${c.status === 'ok' ? 'fg-badge--emerald' : 'fg-badge--amber'}`}>
+                          <ShieldCheck size={12} aria-hidden />
+                          {c.status === 'ok' ? 'Atualizado' : c.status}
                         </span>
                       </td>
                     </tr>
@@ -356,6 +238,12 @@ export function SecaoPage({ secao }: { secao: Secao }) {
             </div>
           </div>
         )}
+
+        {coletas && coletas.length === 0 && (
+          <EmptyState title="Ainda não há atualizações registradas">
+            Quando uma nova carga de dados for feita, ela aparecerá aqui.
+          </EmptyState>
+        )}
       </section>
     </div>
   );
@@ -364,7 +252,9 @@ export function SecaoPage({ secao }: { secao: Secao }) {
 export function NotFoundPage() {
   return (
     <EmptyState title="Página não encontrada">
-      <Link to="/">Voltar ao início</Link>
+      <Link to="/" className="fg-link">
+        Voltar ao início
+      </Link>
     </EmptyState>
   );
 }

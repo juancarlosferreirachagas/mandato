@@ -100,6 +100,72 @@ export const DIARIOS_OFICIAIS_EXTRAIDOS: EdicaoDiarioExtraido[] = ACERVO_DIARIOS
  */
 export const DECRETOS_ORCAMENTARIOS_AUDITADOS: DecretoOrcamentarioAuditado[] = [
   {
+    id: 'dec-44681-2026',
+    numeroDecreto: 'Decreto Executivo nº 44.681/2026',
+    dataPublicacao: '2026-11-24',
+    edicaoDiarioOficial: 'Diário Oficial de 24/11/2026 (Código DOM #3622)',
+    paginaDiario: 'Págs. 1–2 de 20',
+    tipoOrigem: 'ANULACAO_DOTACAO',
+    rotuloModalidade: 'Suplementação por Anulação · Merenda & Ensino',
+    baseLegal: 'Processo Administrativo nº 1118.2026/0056011-6 · Art. 63, XIV da Lei Orgânica de Guarulhos c/c Lei nº 8.464/2025',
+    valorTotal: 5700000.0,
+    tituloObjetivo: 'Redução de Ações de Proteção Animal e RPV → R$ 5,7 Milhões para Alimentação Escolar e Ensino',
+    resumoExplicativo:
+      'Publicado nas páginas 1 e 2 do Diário Oficial de 24/11/2026 (DOM #3622), o Decreto nº 44.681 abre crédito suplementar de R$ 5.700.000,00 na Secretaria de Educação (Unidade 0810), sendo R$ 4,0 milhões para Alimentação Escolar (Ação 2058) e R$ 1,7 milhão para Ações Complementares ao Ensino (Ação 2057), anulando R$ 5.598.683,25 de Ações de Proteção Animal (Unidade 1810) e R$ 101.316,75 de Sentenças de Pequeno Valor (RPV).',
+    parecerAuditoriaTecnica:
+      'DADO OFICIAL VERIFICADO NO PDF (1548485002.pdf#page=1 · sha256:4876949cce1e9113...): Realocação integral na Fonte 01 (Tesouro Municipal - Aplicação 1100000), transferindo saldo da Subfunção 541 (Preservação e Conservação Ambiental / Proteção Animal) para a Função 12 (Educação).',
+    origens: [
+      {
+        orgaoOrigem: 'Secretaria do Meio Ambiente / Proteção Animal (Unidade 1810)',
+        dotacaoCodigo: '1810.1854100262.077.01.1100000.335039.0000',
+        acaoProgramatica: 'Ação 2077 — Ações de Proteção Animal',
+        elementoNatureza: '3.3.50.39.00 — Serviços de Terceiros PJ / Entidades (Redução R$ 5.598.683,25)',
+        fonteRecurso: '01 — Tesouro Municipal (Aplicação 1100000 - Geral)',
+        valor: 5598683.25,
+        impactoOrigemCidadao:
+          'Redução de dotação originalmente prevista para convênios e serviços de proteção e bem-estar animal no exercício de 2026.',
+      },
+      {
+        orgaoOrigem: 'Encargos Gerais do Município (Unidade 8010)',
+        dotacaoCodigo: '8010.2884699990.006.01.1100000.319091.0000',
+        acaoProgramatica: 'Ação 0006 — Sentenças Judiciais e Requisições de Pequeno Valor (RPV)',
+        elementoNatureza: '3.1.90.91.00 — Sentenças Judiciais (Redução R$ 101.316,75)',
+        fonteRecurso: '01 — Tesouro Municipal (Aplicação 1100000 - Geral)',
+        valor: 101316.75,
+        impactoOrigemCidadao:
+          'Ajuste residual de saldo na ficha de sentenças judiciais de pequeno valor.',
+      },
+    ],
+    destinos: [
+      {
+        orgaoDestino: 'Secretaria Municipal de Educação — Alimentação Escolar (Unidade 0810)',
+        areaTematica: 'Educação & Merenda Escolar',
+        dotacaoCodigo: '0810.1236100212.058 / 1236500212.058 / 1236600212.058 (Elemento 339030)',
+        acaoProgramatica: 'Ação 2058 — Alimentação Escolar (Infantil, Fundamental e EJA)',
+        elementoNatureza: '3.3.90.30.00 — Material de Consumo / Gêneros Alimentícios (R$ 4.000.000,00)',
+        fonteRecurso: '01 — Tesouro Municipal (Aplicação 1100000)',
+        valor: 4000000.0,
+        aplicacaoPraticaCidadao:
+          'Compra de insumos e refeições da merenda escolar servida nas EPGs e creches da rede municipal.',
+        filtroFornecedorRelacionado: 'ALIMENT',
+      },
+      {
+        orgaoDestino: 'Secretaria Municipal de Educação — Apoio Pedagógico (Unidade 0810)',
+        areaTematica: 'Educação & Ensino',
+        dotacaoCodigo: '0810.1236100212.057 / 1236500212.057 (Elemento 339039)',
+        acaoProgramatica: 'Ação 2057 — Ações Complementares e Integradoras ao Ensino',
+        elementoNatureza: '3.3.90.39.00 — Outros Serviços de Terceiros PJ (R$ 1.700.000,00)',
+        fonteRecurso: '01 — Tesouro Municipal (Aplicação 1100000)',
+        valor: 1700000.0,
+        aplicacaoPraticaCidadao:
+          'Serviços pedagógicos integradores na educação infantil e no ensino fundamental.',
+        filtroFornecedorRelacionado: 'EDUCACAO',
+      },
+    ],
+    hashIntegridadeSha256: 'sha256:4876949cce1e911324c6ac33a92011e86f421d859df1a30c77cbdc2342c409ae · 1548485002.pdf',
+    urlDiarioOficial: 'https://diariooficial.guarulhos.sp.gov.br/uploads/pdf/1548485002.pdf#page=1',
+  },
+  {
     id: 'dec-44655-2026',
     numeroDecreto: 'Decreto Executivo nº 44.655/2026',
     dataPublicacao: '2026-11-17',
@@ -142,6 +208,50 @@ export const DECRETOS_ORCAMENTARIOS_AUDITADOS: DecretoOrcamentarioAuditado[] = [
     ],
     hashIntegridadeSha256: 'pdf:1968491233.pdf#page=1 · DOM-GRU 17/11/2026 · Decreto nº 44.655',
     urlDiarioOficial: 'https://www.guarulhos.sp.gov.br/uploads/pdf/1968491233.pdf#page=1&search=suplementar',
+  },
+  {
+    id: 'dec-44643-2026',
+    numeroDecreto: 'Decreto Executivo nº 44.643/2026',
+    dataPublicacao: '2026-11-13',
+    edicaoDiarioOficial: 'Diário Oficial de 13/11/2026 (Código DOM #3617)',
+    paginaDiario: 'Pág. 2 de 73',
+    tipoOrigem: 'EXCESSO_ARRECADACAO',
+    rotuloModalidade: 'Excesso de Arrecadação · Trânsito (FMTT)',
+    baseLegal: 'Processo Administrativo nº 1124.2026/0012909-4 · Art. 43, § 1º, II da Lei Federal nº 4.320/1964',
+    valorTotal: 34000000.0,
+    tituloObjetivo: 'Excesso de Arrecadação do Fundo de Trânsito (FMTT) → R$ 34 Milhões para Fiscalização Viária',
+    resumoExplicativo:
+      'Extraído diretamente da página 2 do Diário Oficial de 13/11/2026 (DOM #3617), o Decreto nº 44.643 abre crédito suplementar de R$ 34.000.000,00 utilizando excesso de arrecadação apurado no Fundo Municipal de Transportes e Trânsito (FMTT - Aplicação 4000001 Trânsito) para custear contratos de Fiscalização Viária (Ação 2063).',
+    parecerAuditoriaTecnica:
+      'DADO OFICIAL VERIFICADO NO PDF LOCAL (1457122089.pdf#page=2 · sha256:11268630908650ab...): Este decreto estava na mesma página de outros atos e só foi revelado pela leitura integral do PDF. Vinculação estrita ao código de aplicação 4000001 (Trânsito - Art. 320 CTB).',
+    origens: [
+      {
+        orgaoOrigem: 'Fundo Municipal de Transportes e Trânsito — FMTT (Fundo 10)',
+        dotacaoCodigo: 'Excesso de Arrecadação — Fundo 10 (Aplicação 4000001 - Trânsito)',
+        acaoProgramatica: 'Arrecadação acima do previsto na LOA 2026 com receitas vinculadas de trânsito',
+        elementoNatureza: 'Art. 43, § 1º, II da Lei 4.320/1964 (Excesso de Arrecadação R$ 34.000.000,00)',
+        fonteRecurso: '01 — Recursos Vinculados ao Trânsito (FMTT - 4000001)',
+        valor: 34000000.0,
+        impactoOrigemCidadao:
+          'Não retira verba de outra secretaria: utiliza receita extra arrecadada pelo próprio Fundo Municipal de Trânsito.',
+      },
+    ],
+    destinos: [
+      {
+        orgaoDestino: 'Fundo Municipal de Transportes e Trânsito — Mobilidade Urbana (Unidade 1091)',
+        areaTematica: 'Transporte & Fiscalização Viária',
+        dotacaoCodigo: '1091.2612500222.063.01.4000001.339039.0010',
+        acaoProgramatica: 'Ação 2063 — Fiscalização Viária',
+        elementoNatureza: '3.3.90.39.00 — Outros Serviços de Terceiros PJ (Suplementação R$ 34.000.000,00)',
+        fonteRecurso: '01 — Aplicação 4000001 (FMTT)',
+        valor: 34000000.0,
+        aplicacaoPraticaCidadao:
+          'Operação de engenharia de tráfego, monitoramento eletrônico, sinalização e fiscalização viária em Guarulhos.',
+        filtroFornecedorRelacionado: 'TRANSITO',
+      },
+    ],
+    hashIntegridadeSha256: 'sha256:11268630908650ab130d95a493f425465b8cd791caf2e3b8b132a8137e6c7a0a · 1457122089.pdf',
+    urlDiarioOficial: 'https://diariooficial.guarulhos.sp.gov.br/uploads/pdf/1457122089.pdf#page=2',
   },
   {
     id: 'dec-44622-2026',

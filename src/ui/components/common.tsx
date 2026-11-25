@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { fonteRepository } from '@/repositories/adminRepositories';
 import { formatarData } from '@/domain/rules';
 import type { Fonte } from '@/domain/types';
+import { LINKS_OFICIAIS } from '@/domain/plataforma';
 
 export function Loading({ label = 'Carregando…' }: { label?: string }) {
   return <p className="muted" role="status">{label}</p>;
@@ -22,9 +23,13 @@ export function EmptyState({ title, children }: { title: string; children?: Reac
 
 function urlHumanaFonte(url?: string | null): { href: string; label: string } | null {
   if (!url) return null;
-  if (url.includes('/api/json/') || url.includes('transparencia.tce.sp.gov.br/api')) {
+  if (
+    url.includes('/api/json/') ||
+    url.includes('transparencia.tce.sp.gov.br/api') ||
+    url.includes('transparencia.tce.sp.gov.br/painel')
+  ) {
     return {
-      href: 'https://transparencia.tce.sp.gov.br/painel/guarulhos',
+      href: LINKS_OFICIAIS.tce,
       label: 'Abrir Painel Visual do TCE-SP (Guarulhos) ↗',
     };
   }
@@ -36,7 +41,7 @@ function urlHumanaFonte(url?: string | null): { href: string; label: string } | 
   }
   if (url.includes('#doc-')) {
     return {
-      href: 'https://www.guarulhos.sp.leg.br/atividade-legislativa',
+      href: LINKS_OFICIAIS.camaraAtividade,
       label: 'Portal Legislativo da Câmara de Guarulhos ↗',
     };
   }

@@ -39,6 +39,7 @@ import { despesasRepository } from '@/repositories/despesasRepository';
 import { useAsync } from '../hooks/useAsync';
 import { ErrorBox, Loading } from '../components/common';
 import { brl, brlCompacto, formatarCnpj, inteiro, nomeLegivel, dataBr } from '../format';
+import { QTD_DECRETOS } from '@/domain/plataforma';
 
 /** Quantidade padrão de credores exibidos por página na tabela de auditoria */
 const LIMIT = 30;
@@ -61,12 +62,12 @@ const MESES_NOMES = [
 
 /** Atalhos temáticos de auditoria rápida para os maiores contratos municipais */
 const ATALHOS_AUDITORIA = [
-  { label: 'Todos Fornecedores Externos', q: '' },
-  { label: 'Hospitais & Gestão de Saúde', q: 'SAUDE' },
-  { label: 'Ônibus & Viações Urbanas', q: 'VIACAO' },
-  { label: 'Coleta de Lixo & Saneamento', q: 'SUSTENTARE' },
-  { label: 'Construtoras & Pavimentação', q: 'CONSTRU' },
-  { label: 'Vale-Alimentação & Benefícios', q: 'SODEXO' },
+  { label: 'Todos', q: '' },
+  { label: 'Saúde e hospitais', q: 'SAUDE' },
+  { label: 'Ônibus e transporte', q: 'VIACAO' },
+  { label: 'Coleta de lixo', q: 'SUSTENTARE' },
+  { label: 'Obras e construtoras', q: 'CONSTRU' },
+  { label: 'Vale-alimentação', q: 'SODEXO' },
 ];
 
 export function DespesasPage() {
@@ -75,14 +76,16 @@ export function DespesasPage() {
   // --------------------------------------------------------------------------
   // 1. Leitura determinística dos parâmetros de auditoria a partir da URL
   // --------------------------------------------------------------------------
-  const ano = searchParams.get('ano') ? Number(searchParams.get('ano')) : 2026;
-  const mesParam = searchParams.get('mes') ? Number(searchParams.get('mes')) : null;
+  const anoRaw = searchParams.get('ano');
+  const ano: number | null = anoRaw === 'todos' ? null : Number(anoRaw) === 2025 ? 2025 : 2026;
+  const mesParam = ano !== null && searchParams.get('mes') ? Number(searchParams.get('mes')) : null;
   const orgaoParam = searchParams.get('orgao') || null;
   const qParam = searchParams.get('q') || '';
   const tipoParam = (searchParams.get('tipo') as 'PJ' | 'PF' | null) || null;
   // Por padrão, oculta repasses intra-orçamentários (ex.: Prefeitura -> IPREM) para focar em empresas externas
   const somenteExternos = searchParams.get('todos') !== '1';
   const pagina = Math.max(1, Number(searchParams.get('p') || '1'));
+  const temFiltroAtivo = Boolean(qParam || mesParam || orgaoParam || tipoParam || !somenteExternos);
 
   const [buscaTexto, setBuscaTexto] = useState(qParam);
 
@@ -158,39 +161,43 @@ export function DespesasPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <span className="fg-hero__eyebrow">
                 <span className="fg-hero__dot" />
-                AUDITORIA DE DESPESAS · SISTEMA AUDESP / TCE-SP
+                Quem recebe o dinheiro · dados do TCE-SP
               </span>
               <StatusBanco />
             </div>
 
             <h1 className="fg-hero__title" style={{ marginTop: 8, marginBottom: 6 }}>
-              Fornecedores &amp; Pagamentos de <span>Guarulhos</span>
+              Fornecedores e pagamentos de <span>Guarulhos</span>
             </h1>
             <p className="fg-hero__lead">
-              Ranking auditável de todas as empresas, organizações sociais e prestadores que receberam pagamentos
-              liquidados pela Prefeitura, Câmara Municipal e IPREM em {ano}.
+              Lista das empresas, organizações e pessoas que receberam pagamentos da Prefeitura, da Câmara e do IPREM{' '}
+              {ano === null ? 'em 2025 e 2026' : `em ${ano}`}. Toque em um nome para ver cada pagamento.
             </p>
 
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 14 }}>
-              <button
-                type="button"
-                onClick={() => atualizarFiltros({ ano: '2026', mes: null })}
-                className={ano === 2026 ? 'fg-btn-audit-live' : 'fg-btn-audit-ghost'}
-                style={{ cursor: 'pointer' }}
-              >
-                <span>Exercício 2026 (R$ 4,28 bi · 24.177 pags)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => atualizarFiltros({ ano: '2025', mes: null })}
-                className={ano === 2025 ? 'fg-btn-audit-live' : 'fg-btn-audit-ghost'}
-                style={{ cursor: 'pointer' }}
-              >
-                <span>Exercício 2025 Completo (R$ 6,34 bi · 38.571 pags)</span>
-              </button>
+            <div className="fg-hero__actions">
+              <div className="fg-seg" role="group" aria-label="Escolha o período">
+                {[
+                  { id: 2026 as const, rotulo: '2026' },
+                  { id: 2025 as const, rotulo: '2025' },
+                  { id: 'todos' as const, rotulo: '2025–2026' },
+                ].map((op) => {
+                  const ativo = (op.id === 'todos' && ano === null) || ano === op.id;
+                  return (
+                    <button
+                      key={String(op.id)}
+                      type="button"
+                      className={`fg-seg__btn${ativo ? ' is-active' : ''}`}
+                      aria-pressed={ativo}
+                      onClick={() => atualizarFiltros({ ano: String(op.id), mes: null })}
+                    >
+                      {op.rotulo}
+                    </button>
+                  );
+                })}
+              </div>
               <Link to="/decretos" className="fg-btn-audit-ghost">
-                <ArrowRightLeft size={15} />
-                <span>262 Decretos &amp; 212 Diários Oficiais</span>
+                <ArrowRightLeft size={15} aria-hidden />
+                <span>Ver os {QTD_DECRETOS} decretos</span>
               </Link>
             </div>
           </div>
@@ -198,39 +205,39 @@ export function DespesasPage() {
           {/* KPIs Dinâmicos do Filtro Atual */}
           <div className="fg-hero-kpis">
             <div className="fg-hero-kpi">
-              <div className="fg-hero-kpi__lbl">Total Pago no Escopo</div>
+              <div className="fg-hero-kpi__lbl">Total pago</div>
               <div className="fg-hero-kpi__val fg-hero-kpi__val--amber">
                 {data?.resumo ? brlCompacto(data.resumo.total_liquido) : '...'}
               </div>
               <div className="fg-hero-kpi__sub">
-                {data?.resumo ? brl(data.resumo.total_liquido) : 'Consultando RPC...'}
+                {data?.resumo ? brl(data.resumo.total_liquido) : 'Carregando…'}
               </div>
             </div>
 
             <div className="fg-hero-kpi">
-              <div className="fg-hero-kpi__lbl">Ordens Bancárias</div>
+              <div className="fg-hero-kpi__lbl">Pagamentos</div>
               <div className="fg-hero-kpi__val fg-hero-kpi__val--sky">
                 {data?.resumo ? inteiro(data.resumo.qtd_pagamentos) : '...'}
               </div>
-              <div className="fg-hero-kpi__sub">Pagamentos liquidados</div>
+              <div className="fg-hero-kpi__sub">pagamentos feitos</div>
             </div>
 
             <div className="fg-hero-kpi">
-              <div className="fg-hero-kpi__lbl">Credores Encontrados</div>
+              <div className="fg-hero-kpi__lbl">Fornecedores</div>
               <div className="fg-hero-kpi__val fg-hero-kpi__val--emerald">
                 {data ? inteiro(totalLinhas || data.resumo.qtd_credores) : '...'}
               </div>
               <div className="fg-hero-kpi__sub">
-                {somenteExternos ? 'Fornecedores externos' : 'Todos os recebedores'}
+                {somenteExternos ? 'Empresas e entidades externas' : 'Todos os recebedores'}
               </div>
             </div>
 
             <div className="fg-hero-kpi">
-              <div className="fg-hero-kpi__lbl">Última Liquidação</div>
+              <div className="fg-hero-kpi__lbl">Último pagamento</div>
               <div className="fg-hero-kpi__val">
                 {data?.resumo ? dataBr(data.resumo.ultima_data) : '...'}
               </div>
-              <div className="fg-hero-kpi__sub">Sincronizado via Audesp</div>
+              <div className="fg-hero-kpi__sub">Dado do TCE-SP</div>
             </div>
           </div>
         </div>
@@ -245,8 +252,7 @@ export function DespesasPage() {
         </div>
         <div className="fg-audit-explainer__content" style={{ width: '100%' }}>
           <div style={{ marginBottom: 8 }}>
-            <strong>Filtro Rápido por Setor Contratado:</strong> Selecione um grupo abaixo para auditar os maiores
-            contratos contínuos da cidade ou pesquise qualquer razão social, CNPJ ou número de empenho:
+            <strong>Atalhos por assunto:</strong> escolha um grupo para ver quem mais recebeu, ou use a busca abaixo para encontrar qualquer empresa, CNPJ ou nº de empenho:
           </div>
           <div className="fg-pills">
             {ATALHOS_AUDITORIA.map((item) => (
@@ -270,12 +276,12 @@ export function DespesasPage() {
       <div className="fg-filters" style={{ marginBottom: 18 }}>
         {/* Busca por Razão Social, CNPJ ou Histórico do Empenho */}
         <form onSubmit={aplicarBusca} className="fg-field fg-field--wide">
-          <label htmlFor="filtro-busca">Pesquisar Empresa / CNPJ / Nº de Empenho</label>
+          <label htmlFor="filtro-busca">Buscar empresa, CNPJ ou nº do empenho</label>
           <div style={{ display: 'flex', gap: 6 }}>
             <input
               id="filtro-busca"
               type="search"
-              placeholder="Ex: Sodexo, 46.319..., Construção, Hospital..."
+              placeholder="Ex.: Sodexo, hospital, construtora ou CNPJ"
               value={buscaTexto}
               onChange={(e) => setBuscaTexto(e.target.value)}
             />
@@ -285,34 +291,42 @@ export function DespesasPage() {
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
               <Search size={15} />
-              <span>Auditar</span>
+              <span>Buscar</span>
             </button>
           </div>
         </form>
 
         {/* Exercício Financeiro */}
         <div className="fg-field">
-          <label htmlFor="filtro-ano">Exercício (LOA)</label>
+          <label htmlFor="filtro-ano">Ano</label>
           <select
             id="filtro-ano"
-            value={ano}
+            value={ano === null ? 'todos' : String(ano)}
             onChange={(e) => atualizarFiltros({ ano: e.target.value, mes: null })}
           >
-            <option value="2026">2026 (Jan–Ago · R$ 4,28 bi)</option>
-            <option value="2025">2025 (Ano completo · R$ 6,34 bi)</option>
+            <option value="2026">2026 (em andamento)</option>
+            <option value="2025">2025 (ano completo)</option>
+            <option value="todos">2025 e 2026 (consolidado)</option>
           </select>
         </div>
 
         {/* Competência Mensal */}
         <div className="fg-field">
-          <label htmlFor="filtro-mes">Competência Mensal</label>
+          <label htmlFor="filtro-mes">Mês</label>
           <select
             id="filtro-mes"
             value={mesParam ?? ''}
+            disabled={ano === null}
             onChange={(e) => atualizarFiltros({ mes: e.target.value || null })}
           >
-            <option value="">{ano === 2025 ? 'Todos os 12 meses (Jan–Dez)' : 'Acumulado no Ano (Jan–Ago)'}</option>
-            {MESES_NOMES.filter((m) => ano === 2025 || m.val <= 8).map((m) => (
+            <option value="">
+              {ano === null
+                ? 'Todos os meses (escolha um ano)'
+                : ano === 2025
+                ? 'Ano todo'
+                : 'Ano todo, até agora'}
+            </option>
+            {MESES_NOMES.filter((m) => ano === 2025 || m.val <= 9).map((m) => (
               <option key={m.val} value={m.val}>
                 {m.label}
               </option>
@@ -322,13 +336,13 @@ export function DespesasPage() {
 
         {/* Unidade Gestora / Órgão Pagador */}
         <div className="fg-field">
-          <label htmlFor="filtro-orgao">Unidade Pagadora</label>
+          <label htmlFor="filtro-orgao">Quem pagou</label>
           <select
             id="filtro-orgao"
             value={orgaoParam ?? ''}
             onChange={(e) => atualizarFiltros({ orgao: e.target.value || null })}
           >
-            <option value="">Todos os Órgãos Municipais</option>
+            <option value="">Todos</option>
             <option value="PREFEITURA MUNICIPAL DE GUARULHOS">Prefeitura Municipal (Executivo)</option>
             <option value="CÂMARA MUNICIPAL DE GUARULHOS">Câmara Municipal (Legislativo)</option>
             <option value="INSTITUTO DE PREVID.FUNC.PÚBL.MUNICIPAIS DE GUARULHOS">IPREM (Previdência Municipal)</option>
@@ -337,30 +351,41 @@ export function DespesasPage() {
 
         {/* Natureza Jurídica do Favorecido */}
         <div className="fg-field">
-          <label htmlFor="filtro-tipo">Natureza do Credor</label>
+          <label htmlFor="filtro-tipo">Tipo de fornecedor</label>
           <select
             id="filtro-tipo"
             value={tipoParam ?? ''}
             onChange={(e) => atualizarFiltros({ tipo: e.target.value || null })}
           >
-            <option value="">Todos (PJ e PF)</option>
-            <option value="PJ">Pessoa Jurídica (CNPJ)</option>
-            <option value="PF">Pessoa Física (CPF Mascarado LGPD)</option>
+            <option value="">Todos</option>
+            <option value="PJ">Empresa (CNPJ)</option>
+            <option value="PF">Pessoa física (CPF protegido)</option>
           </select>
         </div>
 
         {/* Filtro Contábil de Operações Intra-Orçamentárias (Modalidade 91) */}
         <div className="fg-field fg-field--wide">
-          <label className="fg-check">
-            <input
-              type="checkbox"
-              checked={somenteExternos}
-              onChange={(e) => atualizarFiltros({ todos: e.target.checked ? null : '1' })}
-            />
-            <span>
-              Isolar fornecedores privados externos (ocultar repasses intra-orçamentários entre Prefeitura e IPREM)
-            </span>
-          </label>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <label className="fg-check" style={{ flex: '1 1 240px' }}>
+              <input
+                type="checkbox"
+                checked={somenteExternos}
+                onChange={(e) => atualizarFiltros({ todos: e.target.checked ? null : '1' })}
+              />
+              <span>
+                Mostrar só empresas e entidades externas (esconde repasses entre Prefeitura e IPREM)
+              </span>
+            </label>
+            {temFiltroAtivo && (
+              <button
+                type="button"
+                className="fg-btn"
+                onClick={() => setSearchParams(ano === null ? { ano: 'todos' } : { ano: String(ano) })}
+              >
+                Limpar filtros
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
@@ -375,19 +400,19 @@ export function DespesasPage() {
             <thead>
               <tr>
                 <th className="rank">#</th>
-                <th>Credor / Favorecido Oficial</th>
-                <th>Natureza</th>
-                <th className="num">Ordens Pagas</th>
+                <th>Quem recebeu</th>
+                <th>Tipo</th>
+                <th className="num">Pagamentos</th>
                 <th>Último Pagamento</th>
-                <th className="num">Total Líquido Recebido</th>
-                <th style={{ textAlign: 'right' }}>Dossiê de Auditoria</th>
+                <th className="num">Total recebido</th>
+                <th style={{ textAlign: 'right' }}>Detalhes</th>
               </tr>
             </thead>
             <tbody>
               {loading && !data && (
                 <tr>
                   <td colSpan={7} className="fg-empty-row">
-                    <Loading label="Consultando base analítica auditada do TCE-SP..." />
+                    <Loading label="Carregando pagamentos…" />
                   </td>
                 </tr>
               )}
@@ -405,14 +430,14 @@ export function DespesasPage() {
                             className="fg-tag fg-tag--warn"
                             title="Transferência intra-orçamentária entre entes públicos do município"
                           >
-                            Repasse Intra-Orçamentário
+                            Repasse entre órgãos
                           </span>
                         )}
                       </div>
                       <div className="fg-cell-sub">
                         {c.cnpj_credor
                           ? `CNPJ: ${formatarCnpj(c.cnpj_credor)}`
-                          : 'Pessoa Física (CPF protegido — Art. 31 LAI / LGPD)'}
+                          : 'Pessoa física (CPF protegido pela LGPD)'}
                       </div>
                     </td>
                     <td data-label="Natureza">
@@ -420,7 +445,7 @@ export function DespesasPage() {
                         {c.tipo_credor ?? 'OUTRO'}
                       </span>
                     </td>
-                    <td className="num" data-label="Ordens Pagas" style={{ fontFamily: 'var(--font-mono)' }}>
+                    <td className="num" data-label="Pagamentos" style={{ fontFamily: 'var(--font-mono)' }}>
                       {inteiro(c.qtd)}
                     </td>
                     <td data-label="Último pagamento" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.82rem' }}>
@@ -443,7 +468,7 @@ export function DespesasPage() {
                         }}
                       >
                         <FileCheck2 size={14} />
-                        <span>Dossiê &amp; Empenhos</span>
+                        <span>Ver detalhes</span>
                         <ArrowUpRight size={13} />
                       </Link>
                     </td>
@@ -454,7 +479,7 @@ export function DespesasPage() {
               {data && data.ranking.length === 0 && (
                 <tr>
                   <td colSpan={7} className="fg-empty-row">
-                    Nenhum credor ou pagamento encontrado com os parâmetros de auditoria selecionados.
+                    Nenhum fornecedor encontrado com esses filtros. Tente outro termo ou limpe a busca.
                   </td>
                 </tr>
               )}
@@ -466,9 +491,9 @@ export function DespesasPage() {
         {totalPaginas > 1 && (
           <div className="fg-pager">
             <div>
-              Exibindo registros <strong>{deslocamento + 1}</strong> a{' '}
+              Mostrando <strong>{deslocamento + 1}</strong> a{' '}
               <strong>{Math.min(deslocamento + LIMIT, totalLinhas)}</strong> de{' '}
-              <strong>{inteiro(totalLinhas)}</strong> credores auditados
+              <strong>{inteiro(totalLinhas)}</strong> fornecedores
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button
@@ -496,11 +521,10 @@ export function DespesasPage() {
       </div>
 
       <div className="fg-footer-note" style={{ marginTop: 22 }}>
-        <strong>Nota Metodológica (Padrão TCE-SP / NBC TA):</strong> Os valores acima refletem exclusivamente o estágio
-        de <em>Despesa Paga Líquida</em> (pagamentos efetivados deduzidos de eventuais estornos/devoluções contábeis no
-        período). Para verificar as alterações de dotação que autorizaram esses gastos, consulte a aba{' '}
+        <strong>Como ler:</strong> os valores mostram o que foi efetivamente <em>pago</em>, já descontados estornos e
+        devoluções. Para saber o que autorizou esses gastos, veja os{' '}
         <Link to="/decretos" className="fg-link">
-          Decretos &amp; Diários Extraídos
+          {QTD_DECRETOS} decretos do Diário Oficial
         </Link>
         .
       </div>

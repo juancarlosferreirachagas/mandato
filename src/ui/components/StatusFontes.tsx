@@ -48,8 +48,8 @@ export function StatusBanco({ compacto = false }: { compacto?: boolean }) {
   if (e.fase === 'carregando') {
     return (
       <span className="fg-status fg-status--wait" role="status">
-        <Loader2 size={12} className="fg-spin" />
-        <span>Validando base…</span>
+        <Loader2 size={12} className="fg-spin" aria-hidden />
+        <span>Verificando dados…</span>
       </span>
     );
   }
@@ -60,15 +60,15 @@ export function StatusBanco({ compacto = false }: { compacto?: boolean }) {
       role="status"
       title={
         e.modo === 'LOCAL'
-          ? 'Base oficial TCE-2026 & TSE-2024 ativa em contingência local de alta velocidade'
-          : 'Conectado ao cluster remoto Supabase PostgreSQL'
+          ? 'Base oficial TCE-SP & TSE pronta para consulta instantânea'
+          : 'Conectado ao banco remoto de dados abertos'
       }
     >
-      {e.modo === 'LOCAL' ? <Database size={12} /> : <CheckCircle2 size={12} />}
+      {e.modo === 'LOCAL' ? <Database size={12} aria-hidden /> : <CheckCircle2 size={12} aria-hidden />}
       <span>
         {compacto
-          ? `Base Validada · ${e.ms} ms`
-          : `Fontes TCE-SP & TSE Ativas (${e.ms} ms)`}
+          ? 'Dados oficiais ativos'
+          : `Fontes oficiais ativas · ${e.ms} ms`}
       </span>
     </span>
   );

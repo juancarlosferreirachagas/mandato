@@ -6,6 +6,7 @@ dist
 data/
 TCE-2025/
 TCE-2026/
+acervo-diarios/
 *.log
 .supabase
 scripts/

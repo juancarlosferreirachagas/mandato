@@ -17,6 +17,19 @@ import { db } from '@/database/client';
 import { ELEITOS_GUARULHOS_TSE_2024 } from '@/database/contingenciaPoliticosGuarulhos';
 import type { PerfilPolitico, Pessoa, PessoaResumo, Mandato, Candidatura, Filiacao } from '@/domain/types';
 
+function dataBrParaIso(dt?: string | null): string | null {
+  if (!dt) return null;
+  const m = /^(\d{2})\/(\d{2})\/(\d{4})$/.exec(dt.trim());
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : null;
+}
+
+function capitalizarFrase(s?: string | null): string | undefined {
+  if (!s) return undefined;
+  return s
+    .toLowerCase()
+    .replace(/(^|\s|\/|-)(\p{L})/gu, (_, sep, ch) => `${sep}${ch.toUpperCase()}`);
+}
+
 const MANDATO_SELECT =
   'id, pessoa_id, inicio, fim, situacao, condicao, fonte_id, cargo:cargos(codigo,nome), localidade:localidades(nome,sigla), partido:partidos(sigla), orgao:orgaos(nome,sigla)';
 const CANDIDATURA_SELECT =
@@ -160,16 +173,47 @@ export const pessoaRepository = {
     const local = (ELEITOS_GUARULHOS_TSE_2024 as any[]).find((e) => e.pessoaId === id);
     if (!local) return null;
 
+    const ocupacaoFmt = capitalizarFrase(local.ocupacao);
+    const escolaridadeFmt = capitalizarFrase(local.escolaridade);
+    const naturalidadeFmt = local.municipioNasc
+      ? `${capitalizarFrase(local.municipioNasc)}${local.ufNasc ? `/${local.ufNasc}` : ''}`
+      : null;
+
+    const paragrafosBio = [
+      `${local.nome.replace(/\s+/g, ' ')} (${local.nomeCivil}) exerce o mandato titular de ${local.cargoNome} de Guarulhos na 19ª Legislatura (2025–2028), eleito(a) pelo ${local.nomePartidoCompleto || local.partido}${local.votos > 0 ? ` com ${Number(local.votos).toLocaleString('pt-BR')} votos nominais registrados pelo Tribunal Superior Eleitoral (Circunscrição 64777 — Guarulhos)` : ' na chapa majoritária vencedora do 2º turno das Eleições Municipais de 2024'}.`,
+      [
+        naturalidadeFmt ? `Natural de ${naturalidadeFmt}` : null,
+        ocupacaoFmt ? `ocupação declarada à Justiça Eleitoral: ${ocupacaoFmt}` : null,
+        escolaridadeFmt ? `grau de instrução: ${escolaridadeFmt}` : null,
+        local.coligacao && local.coligacao !== 'PARTIDO ISOLADO' ? `coligação/federação: ${local.coligacao}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · ') + '.',
+    ].filter((p) => p.length > 3);
+
     return {
       pessoa: {
         id: local.pessoaId,
         nome_civil: local.nomeCivil,
-        nome_politico: local.nome,
-        data_nascimento: null,
+        nome_politico: local.nome.replace(/\s+/g, ' '),
+        data_nascimento: dataBrParaIso(local.nasc),
         foto_url: local.fotoUrl,
         identificadores_externos: {
           numero_urna: local.numeroUrna,
-          biografia: `${local.nome} (${local.nomeCivil}) foi eleito(a) ${local.cargoNome} de Guarulhos nas Eleições Municipais de 2024 pelo partido ${local.partido} com ${Number(local.votos).toLocaleString('pt-BR')} votos oficiais contabilizados pelo Tribunal Superior Eleitoral (TSE — Circunscrição 64777 Guarulhos).`,
+          ocupacao: ocupacaoFmt,
+          escolaridade: escolaridadeFmt,
+          cargo_mesa_diretora: local.mesaDiretora ?? undefined,
+          email_gabinete: local.emailGabinete ?? undefined,
+          comissoes: Array.isArray(local.comissoes) ? local.comissoes : undefined,
+          url_tse_divulga:
+            local.urlTseDivulga ||
+            `https://divulgacandcontas.tse.jus.br/divulga/#/candidato/2024/2045202024/64777/${local.sq}`,
+          camara_gru_url:
+            local.camaraGruUrl ||
+            (local.cargoCodigo === 'vereador'
+              ? 'https://www.guarulhos.sp.leg.br/vereadores'
+              : 'https://www.guarulhos.sp.gov.br'),
+          biografia: paragrafosBio.join('\n\n'),
         },
       },
       mandatos: [

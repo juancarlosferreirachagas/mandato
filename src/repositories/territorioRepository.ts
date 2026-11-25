@@ -1,4 +1,5 @@
 import { db } from '@/database/client';
+import { obterAtosMunicipaisDoRepresentante } from '@/repositories/abasRepository';
 import type { VagaCargo, MetricasMandato } from '@/domain/types';
 
 export const territorioRepository = {
@@ -36,11 +37,32 @@ export const metricasRepository = {
         p_inicio: inicio ?? null,
         p_fim: fim ?? null,
       });
-      if (error) return null;
-      const row = (data as any[] | null)?.[0];
-      return row ? (row as MetricasMandato) : null;
+      if (!error) {
+        const row = (data as any[] | null)?.[0];
+        if (row) return row as MetricasMandato;
+      }
     } catch {
-      return null;
+      // Failover local calculado a partir das leis e proposições oficiais mapeadas
     }
+
+    if (mandatoId.startsWith('mand-gru-')) {
+      const pessoaId = mandatoId.replace('mand-gru-', 'pess-gru-');
+      const atos = obterAtosMunicipaisDoRepresentante(pessoaId);
+      const aprovados = atos.filter((a) => (a.badge ?? '').toLowerCase().includes('sancionada')).length;
+      return {
+        periodo_inicio: inicio ?? '2025-01-01',
+        periodo_fim: fim ?? '2028-12-31',
+        projetos_apresentados: atos.length,
+        projetos_aprovados: aprovados,
+        votacoes_registradas: 0,
+        votos_computados: 0,
+        sessoes_registradas: 0,
+        sessoes_presente: 0,
+        relatorias: 0,
+        emendas: 0,
+      };
+    }
+
+    return null;
   },
 };
