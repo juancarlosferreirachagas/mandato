@@ -25,6 +25,7 @@ import {
   type PagamentoIntegral,
 } from '@/services/baseIntegralService';
 import { LINKS_OFICIAIS, urlConsultaCnpj } from '@/domain/plataforma';
+import { traduzirHistoricoPagamento } from '@/domain/linguagemCidada';
 import { useAsync } from '../hooks/useAsync';
 import { PainelRaioX } from './PainelRaioX';
 import { GraficoCredorComparativo } from './GraficosModernos';
@@ -226,26 +227,31 @@ export function RaioXEmpresaSheet({ chave, onFechar }: RaioXEmpresaSheetProps) {
               <span>Últimos pagamentos liquidados ({inteiro(data?.pagamentos.length ?? 0)} no total)</span>
             </div>
             <div style={{ display: 'grid', gap: 8 }}>
-              {(data?.pagamentos ?? []).slice(0, 6).map((p) => (
-                <div key={p.id} className="fg-sheet-item">
-                  <div className="fg-sheet-item__top">
-                    <strong>{dataBr(p.data_pagamento)}</strong>
-                    <span className="fg-tag">{nomeOrgaoCurto(p.orgao)}</span>
-                    <strong className={`fg-money ${p.valor_pago < 0 ? 'neg' : ''}`} style={{ marginLeft: 'auto' }}>
-                      {brl(p.valor_pago)}
-                    </strong>
-                  </div>
-                  <p className="fg-sheet-item__text">{p.descricao}</p>
-                  {p.nr_empenho && (
-                    <div className="fg-cell-sub" style={{ fontFamily: 'var(--font-mono)' }}>
-                      Empenho {p.nr_empenho}
-                      {p.modalidade_lic && p.modalidade_lic !== 'Não aplicável / Outros'
-                        ? ` · ${p.modalidade_lic}`
-                        : ''}
+              {(data?.pagamentos ?? []).slice(0, 6).map((p) => {
+                const trad = traduzirHistoricoPagamento(p.descricao);
+                return (
+                  <div key={p.id} className="fg-sheet-item">
+                    <div className="fg-sheet-item__top">
+                      <strong>{dataBr(p.data_pagamento)}</strong>
+                      <span className="fg-tag">{nomeOrgaoCurto(p.orgao)}</span>
+                      <strong className={`fg-money ${p.valor_pago < 0 ? 'neg' : ''}`} style={{ marginLeft: 'auto' }}>
+                        {brl(p.valor_pago)}
+                      </strong>
                     </div>
-                  )}
-                </div>
-              ))}
+                    <p className="fg-sheet-item__text">{trad.resumoLimpo}</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                      {p.nr_empenho && (
+                        <span className="fg-mini-tag">Empenho {p.nr_empenho}</span>
+                      )}
+                      {trad.tags.map((tg) => (
+                        <span key={tg} className="fg-mini-tag">
+                          {tg}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

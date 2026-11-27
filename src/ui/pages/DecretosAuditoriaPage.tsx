@@ -69,6 +69,8 @@ import { IconeArea } from '../components/AreasOrcamento';
 import { verificarFontesEmTempoReal } from '@/services/auditoriaTempoRealService';
 import { StatusBanco } from '../components/StatusFontes';
 import { PaginacaoModerna } from '../components/PaginacaoModerna';
+import { PainelIndicadoresAuditoria } from '../components/PainelIndicadoresAuditoria';
+import { PainelRaioX } from '../components/PainelRaioX';
 import { exportarCsvPlanilha } from '@/services/baseIntegralService';
 import { RESUMO_CONEXOES_OFICIAIS } from '@/database/resumoConexoesOficiais';
 import { urlPdfOficialSegura } from '@/domain/seguranca';
@@ -156,6 +158,8 @@ export function DecretosAuditoriaPage() {
   } | null>(null);
 
   const [decretoSelecionado, setDecretoSelecionado] = useState<DecretoOrcamentarioAuditado | null>(null);
+  const [decretoCatalogoRaioX, setDecretoCatalogoRaioX] = useState<DecretoSuplementarReal | null>(null);
+  const [leiRaioX, setLeiRaioX] = useState<LeiMunicipalSancionadaReal | null>(null);
   const [hashCopiado, setHashCopiado] = useState<string | null>(null);
 
   const copiarHash = (hash: string) => {
@@ -353,7 +357,11 @@ export function DecretosAuditoriaPage() {
         d.numeroFmt.toLowerCase().includes(termo) ||
         d.dataBr.includes(termo) ||
         d.valorFmt.toLowerCase().includes(termo) ||
-        d.trecho.toLowerCase().includes(termo)
+        d.trecho.toLowerCase().includes(termo) ||
+        (d.tituloSimples ?? '').toLowerCase().includes(termo) ||
+        (d.destinoResumo ?? '').toLowerCase().includes(termo) ||
+        (d.origemResumo ?? '').toLowerCase().includes(termo) ||
+        (d.textoIntegral ?? '').toLowerCase().includes(termo)
       );
     });
 
@@ -375,10 +383,6 @@ export function DecretosAuditoriaPage() {
   );
   const somaCatalogoFiltrado = useMemo(
     () => catalogoFiltradoEOrdenado.reduce((acc, d) => acc + d.valor, 0),
-    [catalogoFiltradoEOrdenado]
-  );
-  const maiorDecretoFiltro = useMemo(
-    () => Math.max(...catalogoFiltradoEOrdenado.map((d) => d.valor), 1),
     [catalogoFiltradoEOrdenado]
   );
 
@@ -456,7 +460,10 @@ export function DecretosAuditoriaPage() {
             lei.numeroFmt.toLowerCase().includes(termo) ||
             lei.dataBr.includes(termo) ||
             lei.autoria.toLowerCase().includes(termo) ||
-            lei.ementa.toLowerCase().includes(termo);
+            lei.ementa.toLowerCase().includes(termo) ||
+            (lei.tituloSimples ?? '').toLowerCase().includes(termo) ||
+            (lei.tema ?? '').toLowerCase().includes(termo) ||
+            (lei.autorLimpo ?? '').toLowerCase().includes(termo);
           if (!bate) continue;
         }
         lista.push({
@@ -692,6 +699,10 @@ export function DecretosAuditoriaPage() {
           ==================================================================== */}
       {abaAtiva === 'quebra_cabeca' && trilhaSelecionada && (
         <section aria-label="Quebra-cabeça completo da auditoria municipal">
+          <div style={{ marginBottom: 16 }}>
+            <PainelIndicadoresAuditoria />
+          </div>
+
           {/* Como as 4 peças se encaixam */}
           <div className="fg-puzzle-steps">
             <button
@@ -790,26 +801,21 @@ export function DecretosAuditoriaPage() {
                   {trilhaSelecionada.leisRelacionadas.map((lei) => (
                     <div key={lei.numero} className="fg-puzzle-row">
                       <div className="fg-puzzle-row__top">
-                        <strong>Lei Municipal nº {lei.numeroFmt}</strong>
-                        <span className="fg-tag">{lei.dataBr} · DOM #{lei.codigoDom}</span>
+                        <strong>Lei nº {lei.numeroFmt}</strong>
+                        <span className="fg-tag">{lei.tema || 'Lei Municipal'} · {lei.dataBr}</span>
                       </div>
-                      <p className="fg-puzzle-row__text">{lei.ementa}</p>
+                      <p className="fg-puzzle-row__text" style={{ fontWeight: 700, color: '#0f172a' }}>
+                        {lei.tituloSimples || lei.ementa}
+                      </p>
                       <div className="fg-puzzle-row__foot">
-                        <span className="fg-cell-sub">{lei.autoria}</span>
+                        <span className="fg-cell-sub">{lei.autorLimpo || lei.autoria}</span>
                         <button
                           type="button"
                           className="fg-link-btn"
-                          onClick={() =>
-                            setPdfPreview({
-                              titulo: `Lei Municipal nº ${lei.numeroFmt} (${lei.dataBr})`,
-                              subtitulo: `${lei.autoria} · DOM #${lei.codigoDom}`,
-                              url: lei.pdfUrl,
-                              sha256: lei.sha256Pdf,
-                            })
-                          }
+                          onClick={() => setLeiRaioX(lei)}
                         >
-                          <Eye size={13} aria-hidden />
-                          <span>Ler no PDF</span>
+                          <BookOpen size={13} aria-hidden />
+                          <span>Ler inteira</span>
                         </button>
                       </div>
                     </div>
@@ -1533,76 +1539,73 @@ export function DecretosAuditoriaPage() {
             </div>
           </div>
 
-          {/* Grade Moderna de Decretos (Sem "card dentro de card") */}
+          {/* Grade Limpa e Clara dos 843 Decretos (Sem poluição e com Origem -> Destino) */}
           <div className="fg-clean-decree-grid">
-            {catalogoVisivel.map((dec, idx) => {
-              const posGlobal = (pagCatalogo - 1) * LIMIT_CATALOGO + idx + 1;
-              const pctBarra = Math.max(4, Math.min(100, Math.round((dec.valor / maiorDecretoFiltro) * 100)));
+            {catalogoVisivel.map((dec) => {
               const domEd = dec.codigoDom ? ACERVO_DIARIOS_EXECUTIVO.find((e) => e.codigoDom === dec.codigoDom) : null;
-
               return (
                 <article key={`${dec.numero}-${dec.dataIso}`} className="fg-clean-card">
                   <div className="fg-clean-card__top">
                     <div className="fg-clean-card__badges">
-                      <span className="fg-seq-badge">#{String(posGlobal).padStart(3, '0')}</span>
-                      <strong className="fg-ordered-card__num">Decreto nº {dec.numeroFmt}</strong>
                       <span
                         className={`fg-badge ${
                           dec.modalidade === 'REMANEJAMENTO' ? 'fg-badge--amber' : 'fg-badge--emerald'
                         }`}
                       >
-                        {dec.modalidade === 'REMANEJAMENTO' ? 'Remanejamento Art. 6º' : 'Crédito Suplementar'}
+                        {dec.modalidade === 'REMANEJAMENTO' ? 'Remanejamento' : 'Suplementar'}
                       </span>
-                      <span className="fg-badge fg-badge--blue">{dec.dataBr}</span>
-                      {dec.codigoDom && <span className="fg-badge fg-badge--navy">DOM #{dec.codigoDom}</span>}
-                      <span className="fg-tag">
-                        Pág. {dec.pagina}/{dec.totalPaginas}
+                      <span className="fg-cell-sub">
+                        Decreto <strong>{dec.numeroFmt}</strong> · {dec.dataBr}
                       </span>
                     </div>
-
                     <strong className="fg-clean-card__amount">+ {brl(dec.valor)}</strong>
                   </div>
 
-                  <div className="fg-ordered-card__bar" aria-hidden>
-                    <div className="fg-ordered-card__bar-fill" style={{ width: `${pctBarra}%` }} />
+                  <h3 className="fg-clean-card__title">
+                    {dec.tituloSimples || `Decreto Orçamentário nº ${dec.numeroFmt}`}
+                  </h3>
+
+                  <div className="fg-flow-mini">
+                    <div className="fg-flow-mini__row fg-flow-mini__row--out">
+                      <span>De onde saiu:</span>
+                      <strong>{dec.origemResumo || dec.tipoFonteOrigem || 'Dotações do Art. 2º'}</strong>
+                    </div>
+                    <div className="fg-flow-mini__row fg-flow-mini__row--in">
+                      <span>Para onde foi:</span>
+                      <strong>{dec.destinoResumo || 'Reforço de dotação no Art. 1º'}</strong>
+                    </div>
                   </div>
 
-                  <p className="fg-clean-card__text">{dec.trecho}</p>
-
                   <div className="fg-clean-card__foot">
-                    <span className="fg-sha-pill" title={domEd?.sha256Principal ?? 'PDF oficial verificado'}>
-                      <ShieldCheck size={13} aria-hidden />
-                      <span>
-                        {domEd?.sha256Principal ? `SHA-256 ${domEd.sha256Principal.slice(0, 10)}…` : 'PDF verificado'}
-                      </span>
+                    <span className="fg-cell-sub">
+                      {dec.codigoDom ? `DOM #${dec.codigoDom} · ` : ''}Pág. {dec.pagina}/{dec.totalPaginas}
                     </span>
 
                     <div className="fg-clean-card__actions">
+                      <button
+                        type="button"
+                        className="fg-btn fg-btn--primary fg-btn--sm"
+                        onClick={() => setDecretoCatalogoRaioX(dec)}
+                      >
+                        <BookOpen size={13} aria-hidden />
+                        <span>Ver decreto inteiro</span>
+                      </button>
+
                       <button
                         type="button"
                         className="fg-btn fg-btn--sm"
                         onClick={() =>
                           setPdfPreview({
                             titulo: `Decreto Executivo nº ${dec.numeroFmt}`,
-                            subtitulo: `Diário Oficial de ${dec.dataBr} · Página ${dec.pagina} de ${dec.totalPaginas} · ${brl(dec.valor)}`,
+                            subtitulo: `Diário Oficial de ${dec.dataBr} · Página ${dec.pagina} · ${brl(dec.valor)}`,
                             url: dec.pdfUrl,
                             sha256: domEd?.sha256Principal,
                           })
                         }
                       >
-                        <Eye size={14} aria-hidden />
-                        <span>Ler aqui</span>
+                        <Eye size={13} aria-hidden />
+                        <span>PDF</span>
                       </button>
-
-                      <a
-                        href={dec.pdfUrl}
-                        target="_blank"
-                        rel="noreferrer noopener"
-                        className="fg-btn fg-btn--primary fg-btn--sm"
-                      >
-                        <span>PDF oficial</span>
-                        <ArrowUpRight size={13} aria-hidden />
-                      </a>
                     </div>
                   </div>
                 </article>
@@ -2162,44 +2165,42 @@ export function DecretosAuditoriaPage() {
                 <article key={`lei-${lei.numero}`} className="fg-clean-card">
                   <div className="fg-clean-card__top">
                     <div className="fg-clean-card__badges">
-                      <span className="fg-badge fg-badge--emerald">Lei Municipal nº {lei.numeroFmt}</span>
-                      <span className="fg-badge fg-badge--blue">{lei.dataBr}</span>
-                      <span className="fg-badge fg-badge--navy">DOM #{lei.codigoDom}</span>
+                      <span className="fg-badge fg-badge--blue">{lei.tema || 'Lei Municipal'}</span>
+                      <span className="fg-cell-sub">
+                        Lei nº <strong>{lei.numeroFmt}</strong> · {lei.dataBr}
+                      </span>
                     </div>
+                    {lei.projetoOrigem && <span className="fg-tag">{lei.projetoOrigem}</span>}
                   </div>
 
-                  <h3 className="fg-clean-card__title">Lei nº {lei.numeroFmt}, de {lei.dataBr}</h3>
-                  <div className="fg-cell-sub">{lei.autoria}</div>
-                  <p className="fg-clean-card__text">{lei.ementa}</p>
+                  <h3 className="fg-clean-card__title">
+                    {lei.tituloSimples || `Lei Municipal nº ${lei.numeroFmt}`}
+                  </h3>
+
+                  <p className="fg-clean-card__summary-box">
+                    {lei.oQueMuda || lei.ementa}
+                  </p>
 
                   <div className="fg-clean-card__foot">
-                    <span className="fg-sha-pill">
-                      <ShieldCheck size={13} aria-hidden />
-                      <span>{lei.sha256Pdf ? `SHA-256 ${lei.sha256Pdf.slice(0, 10)}…` : 'PDF verificado'}</span>
+                    <span className="fg-cell-sub">
+                      Autoria: <strong>{lei.autorLimpo || lei.autoria}</strong> · DOM #{lei.codigoDom}
                     </span>
                     <div className="fg-clean-card__actions">
                       <button
                         type="button"
-                        className="fg-btn fg-btn--sm"
-                        onClick={() =>
-                          setPdfPreview({
-                            titulo: `Lei Municipal nº ${lei.numeroFmt} (${lei.dataBr})`,
-                            subtitulo: `${lei.autoria} · DOM #${lei.codigoDom}`,
-                            url: lei.pdfUrl,
-                            sha256: lei.sha256Pdf,
-                          })
-                        }
+                        className="fg-btn fg-btn--primary fg-btn--sm"
+                        onClick={() => setLeiRaioX(lei)}
                       >
-                        <Eye size={13} aria-hidden />
-                        <span>Ler no PDF</span>
+                        <BookOpen size={13} aria-hidden />
+                        <span>Ler lei inteira</span>
                       </button>
                       <a
                         href={lei.pdfUrl}
                         target="_blank"
                         rel="noreferrer noopener"
-                        className="fg-btn fg-btn--primary fg-btn--sm"
+                        className="fg-btn fg-btn--sm"
                       >
-                        <span>Abrir PDF</span>
+                        <span>PDF</span>
                         <ArrowUpRight size={13} aria-hidden />
                       </a>
                     </div>
@@ -2464,6 +2465,169 @@ export function DecretosAuditoriaPage() {
           </div>
         </div>
       )}
+
+      {/* Gaveta Raio-X: Conteúdo Completo e Explicado de Qualquer um dos 843 Decretos */}
+      <PainelRaioX
+        aberto={Boolean(decretoCatalogoRaioX)}
+        onFechar={() => setDecretoCatalogoRaioX(null)}
+        eyebrow={
+          decretoCatalogoRaioX
+            ? `${decretoCatalogoRaioX.modalidade === 'REMANEJAMENTO' ? 'Remanejamento (Art. 6º LOA)' : 'Crédito Adicional Suplementar'} · ${decretoCatalogoRaioX.dataBr}`
+            : undefined
+        }
+        titulo={decretoCatalogoRaioX ? `Decreto nº ${decretoCatalogoRaioX.numeroFmt}` : ''}
+        subtitulo={
+          decretoCatalogoRaioX
+            ? `Valor movimentado: ${brl(decretoCatalogoRaioX.valor)}${decretoCatalogoRaioX.codigoDom ? ` · DOM #${decretoCatalogoRaioX.codigoDom} (Pág. ${decretoCatalogoRaioX.pagina})` : ''}`
+            : undefined
+        }
+        rodape={
+          decretoCatalogoRaioX ? (
+            <>
+              <button
+                type="button"
+                className="fg-btn fg-btn--sm"
+                onClick={() => {
+                  const d = decretoCatalogoRaioX;
+                  setDecretoCatalogoRaioX(null);
+                  setPdfPreview({
+                    titulo: `Decreto nº ${d.numeroFmt} (${d.dataBr})`,
+                    subtitulo: `Página ${d.pagina} de ${d.totalPaginas} · ${brl(d.valor)}`,
+                    url: d.pdfUrl,
+                  });
+                }}
+              >
+                <Eye size={13} aria-hidden />
+                <span>Ver página no leitor PDF</span>
+              </button>
+              <a
+                href={decretoCatalogoRaioX.pdfUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="fg-btn fg-btn--primary fg-btn--sm"
+              >
+                <span>Abrir PDF oficial ↗</span>
+              </a>
+            </>
+          ) : undefined
+        }
+      >
+        {decretoCatalogoRaioX && (
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div className="fg-sheet-section">
+              <div className="fg-sheet-section__head">
+                <Scale size={14} aria-hidden />
+                <span>Em linguagem simples: o que este decreto fez?</span>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.92rem', color: '#0f172a', fontWeight: 700, lineHeight: 1.55 }}>
+                {decretoCatalogoRaioX.explicacaoSimples || decretoCatalogoRaioX.trecho}
+              </p>
+              {decretoCatalogoRaioX.processoSei && (
+                <div className="fg-cell-sub" style={{ fontFamily: 'var(--font-mono)' }}>
+                  Processo administrativo nº {decretoCatalogoRaioX.processoSei}
+                </div>
+              )}
+            </div>
+
+            <div className="fg-flow-mini">
+              <div className="fg-flow-mini__row fg-flow-mini__row--out">
+                <span>De onde saiu (Art. 2º):</span>
+                <strong>{decretoCatalogoRaioX.origemResumo || decretoCatalogoRaioX.tipoFonteOrigem}</strong>
+              </div>
+              <div className="fg-flow-mini__row fg-flow-mini__row--in">
+                <span>Para onde foi (Art. 1º):</span>
+                <strong>{decretoCatalogoRaioX.destinoResumo || 'Dotação suplementada no orçamento'}</strong>
+              </div>
+            </div>
+
+            <div className="fg-sheet-section">
+              <div className="fg-sheet-section__head">
+                <FileText size={14} aria-hidden />
+                <span>Texto oficial completo extraído do Diário Oficial</span>
+              </div>
+              <p className="fg-fulltext-box">
+                {decretoCatalogoRaioX.textoIntegral || decretoCatalogoRaioX.trecho}
+              </p>
+            </div>
+          </div>
+        )}
+      </PainelRaioX>
+
+      {/* Gaveta Raio-X: Conteúdo Completo e Explicado de Qualquer uma das 197 Leis */}
+      <PainelRaioX
+        aberto={Boolean(leiRaioX)}
+        onFechar={() => setLeiRaioX(null)}
+        eyebrow={leiRaioX ? `${leiRaioX.tema || 'Lei Municipal'} · DOM #${leiRaioX.codigoDom} (${leiRaioX.dataBr})` : undefined}
+        titulo={leiRaioX ? `Lei Municipal nº ${leiRaioX.numeroFmt}` : ''}
+        subtitulo={
+          leiRaioX
+            ? `Autoria: ${leiRaioX.autorLimpo || leiRaioX.autoria}${leiRaioX.projetoOrigem ? ` · Origem: ${leiRaioX.projetoOrigem}` : ''}`
+            : undefined
+        }
+        rodape={
+          leiRaioX ? (
+            <>
+              <button
+                type="button"
+                className="fg-btn fg-btn--sm"
+                onClick={() => {
+                  const l = leiRaioX;
+                  setLeiRaioX(null);
+                  setPdfPreview({
+                    titulo: `Lei Municipal nº ${l.numeroFmt} (${l.dataBr})`,
+                    subtitulo: `${l.autorLimpo || l.autoria} · DOM #${l.codigoDom}`,
+                    url: l.pdfUrl,
+                    sha256: l.sha256Pdf,
+                  });
+                }}
+              >
+                <Eye size={13} aria-hidden />
+                <span>Ver página no leitor PDF</span>
+              </button>
+              <a
+                href={leiRaioX.pdfUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="fg-btn fg-btn--primary fg-btn--sm"
+              >
+                <span>Abrir PDF oficial ↗</span>
+              </a>
+            </>
+          ) : undefined
+        }
+      >
+        {leiRaioX && (
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div className="fg-sheet-section">
+              <div className="fg-sheet-section__head">
+                <Scale size={14} aria-hidden />
+                <span>O que esta lei faz na prática</span>
+              </div>
+              <strong style={{ fontSize: '0.98rem', color: '#09152b', lineHeight: 1.35 }}>
+                {leiRaioX.tituloSimples || `Lei nº ${leiRaioX.numeroFmt}`}
+              </strong>
+              <p style={{ margin: 0, fontSize: '0.88rem', color: '#334155', lineHeight: 1.55 }}>
+                {leiRaioX.oQueMuda || leiRaioX.ementa}
+              </p>
+            </div>
+
+            <div className="fg-sheet-section">
+              <div className="fg-sheet-section__head">
+                <BookOpen size={14} aria-hidden />
+                <span>Texto oficial extraído do Diário Oficial</span>
+              </div>
+              <p className="fg-fulltext-box">
+                {leiRaioX.textoIntegral || `${leiRaioX.autoria}\n\n${leiRaioX.ementa}`}
+              </p>
+              {leiRaioX.sha256Pdf && (
+                <div className="fg-cell-sub" style={{ fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>
+                  SHA-256 do PDF: {leiRaioX.sha256Pdf}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </PainelRaioX>
     </div>
   );
 }

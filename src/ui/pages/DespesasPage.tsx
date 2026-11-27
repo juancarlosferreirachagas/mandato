@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { StatusBanco } from '../components/StatusFontes';
 import { PaginacaoModerna } from '../components/PaginacaoModerna';
+import { PainelRaioX } from '../components/PainelRaioX';
 import { RaioXEmpresaSheet } from '../components/RaioXEmpresaSheet';
 import { urlPdfOficialSegura } from '@/domain/seguranca';
 import { despesasRepository, type CredorRanking } from '@/repositories/despesasRepository';
@@ -141,6 +142,7 @@ export function DespesasPage() {
     sha256?: string | null;
   } | null>(null);
   const [raioXChave, setRaioXChave] = useState<string | null>(null);
+  const [atoSelecionado, setAtoSelecionado] = useState<ConexaoEmpresaDom | null>(null);
 
   useEffect(() => {
     if (!pdfPreview) return;
@@ -987,10 +989,9 @@ export function DespesasPage() {
                         <span className="fg-badge fg-badge--amber">
                           {ROTULOS_TIPO_ATO_DOM[cx.tipoAto] || cx.tipoAto}
                         </span>
-                        <span className="fg-badge fg-badge--navy">
-                          DOM #{cx.codigoDom} · Pág. {cx.pagina}
+                        <span className="fg-cell-sub">
+                          {cx.dataBr} · DOM #{cx.codigoDom} (pág. {cx.pagina})
                         </span>
-                        <span className="fg-badge fg-badge--blue">{cx.dataBr}</span>
                       </div>
                       <strong className="fg-clean-card__amount" title="Total pago à empresa em 2025–2026 no TCE-SP">
                         {brlCompacto(cx.totalPagoTce)} pagos
@@ -1008,43 +1009,33 @@ export function DespesasPage() {
                         </button>
                       </h3>
                       <div className="fg-cell-sub" style={{ marginTop: 2 }}>
-                        CNPJ {formatarCnpj(cx.cnpj)} · {cx.area} · {inteiro(cx.qtdPagamentosTce)} pag.
-                        {cx.valorMencionado ? ` · Citado no ato: ${brl(cx.valorMencionado)}` : ''}
+                        CNPJ {formatarCnpj(cx.cnpj)} · {cx.area}
+                        {cx.valorMencionado ? ` · Valor citado no ato: ${brl(cx.valorMencionado)}` : ''}
                       </div>
                     </div>
 
-                    <p className="fg-clean-card__text">{cx.trecho}</p>
+                    <p className="fg-clean-card__summary-box">
+                      {cx.resumoSimples || cx.trecho}
+                    </p>
 
                     <div className="fg-clean-card__foot">
-                      <span className="fg-sha-pill" title={cx.sha256Pdf ?? 'PDF verificado'}>
-                        <ShieldCheck size={13} aria-hidden />
-                        <span>{cx.sha256Pdf ? `SHA-256 ${cx.sha256Pdf.slice(0, 10)}…` : 'PDF verificado'}</span>
-                      </span>
+                      <button
+                        type="button"
+                        className="fg-link-btn"
+                        onClick={() => setAtoSelecionado(cx)}
+                      >
+                        <BookOpen size={13} aria-hidden />
+                        <span>Ler ato inteiro</span>
+                      </button>
 
                       <div className="fg-clean-card__actions">
-                        <button
-                          type="button"
-                          className="fg-btn fg-btn--sm"
-                          onClick={() =>
-                            setPdfPreview({
-                              titulo: `${nomeLegivel(cx.credor)} — DOM #${cx.codigoDom}`,
-                              subtitulo: `${ROTULOS_TIPO_ATO_DOM[cx.tipoAto]} · ${cx.dataBr} · Página ${cx.pagina}`,
-                              url: cx.pdfUrl,
-                              sha256: cx.sha256Pdf,
-                            })
-                          }
-                        >
-                          <Eye size={13} aria-hidden />
-                          <span>Ler PDF</span>
-                        </button>
                         <a
                           href={cx.pdfUrl}
                           target="_blank"
                           rel="noreferrer noopener"
                           className="fg-btn fg-btn--sm"
                         >
-                          <BookOpen size={13} aria-hidden />
-                          <span>Abrir</span>
+                          <span>PDF (pág. {cx.pagina})</span>
                           <ArrowUpRight size={12} aria-hidden />
                         </a>
                         <button
@@ -1052,7 +1043,7 @@ export function DespesasPage() {
                           className="fg-btn fg-btn--primary fg-btn--sm"
                           onClick={() => setRaioXChave(cx.chave)}
                         >
-                          <span>Raio-X</span>
+                          <span>Raio-X empresa</span>
                           <ArrowRight size={13} aria-hidden />
                         </button>
                       </div>
@@ -1151,6 +1142,99 @@ export function DespesasPage() {
 
       {/* Raio-X deslizante sem sair da tela */}
       <RaioXEmpresaSheet chave={raioXChave} onFechar={() => setRaioXChave(null)} />
+
+      {/* Leitura Integral do Ato Publicado no Diário Oficial */}
+      <PainelRaioX
+        aberto={Boolean(atoSelecionado)}
+        onFechar={() => setAtoSelecionado(null)}
+        eyebrow={
+          atoSelecionado
+            ? `${ROTULOS_TIPO_ATO_DOM[atoSelecionado.tipoAto]} · DOM #${atoSelecionado.codigoDom} (Pág. ${atoSelecionado.pagina})`
+            : undefined
+        }
+        titulo={atoSelecionado ? nomeLegivel(atoSelecionado.credor) : ''}
+        subtitulo={
+          atoSelecionado
+            ? `CNPJ ${formatarCnpj(atoSelecionado.cnpj)} · Publicado em ${atoSelecionado.dataBr}`
+            : undefined
+        }
+        rodape={
+          atoSelecionado ? (
+            <>
+              <button
+                type="button"
+                className="fg-btn fg-btn--sm"
+                onClick={() => {
+                  const a = atoSelecionado;
+                  setAtoSelecionado(null);
+                  setPdfPreview({
+                    titulo: `${nomeLegivel(a.credor)} — DOM #${a.codigoDom}`,
+                    subtitulo: `${a.dataBr} · Página ${a.pagina}`,
+                    url: a.pdfUrl,
+                    sha256: a.sha256Pdf,
+                  });
+                }}
+              >
+                <Eye size={13} aria-hidden />
+                <span>Ver página do PDF</span>
+              </button>
+              <button
+                type="button"
+                className="fg-btn fg-btn--primary fg-btn--sm"
+                onClick={() => {
+                  const k = atoSelecionado.chave;
+                  setAtoSelecionado(null);
+                  setRaioXChave(k);
+                }}
+              >
+                <span>Abrir Raio-X dos pagamentos →</span>
+              </button>
+            </>
+          ) : undefined
+        }
+      >
+        {atoSelecionado && (
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div className="fg-sheet-kpis">
+              <div className="fg-sheet-kpi">
+                <span>Total pago no TCE-SP</span>
+                <strong>{brlCompacto(atoSelecionado.totalPagoTce)}</strong>
+                <small>{inteiro(atoSelecionado.qtdPagamentosTce)} pagamentos (2025–2026)</small>
+              </div>
+              <div className="fg-sheet-kpi">
+                <span>Valor citado no ato</span>
+                <strong>{atoSelecionado.valorMencionado ? brl(atoSelecionado.valorMencionado) : 'Ver texto'}</strong>
+                <small>DOM #{atoSelecionado.codigoDom} · Pág. {atoSelecionado.pagina}</small>
+              </div>
+            </div>
+
+            <div className="fg-sheet-section">
+              <div className="fg-sheet-section__head">
+                <BookOpen size={14} aria-hidden />
+                <span>Resumo claro</span>
+              </div>
+              <p style={{ margin: 0, fontSize: '0.9rem', color: '#0f172a', fontWeight: 600, lineHeight: 1.55 }}>
+                {atoSelecionado.resumoSimples || atoSelecionado.trecho}
+              </p>
+            </div>
+
+            <div className="fg-sheet-section">
+              <div className="fg-sheet-section__head">
+                <ShieldCheck size={14} aria-hidden />
+                <span>Texto extraído do Diário Oficial (sem cortes)</span>
+              </div>
+              <p className="fg-fulltext-box">
+                {atoSelecionado.textoIntegral || atoSelecionado.trecho}
+              </p>
+              {atoSelecionado.sha256Pdf && (
+                <div className="fg-cell-sub" style={{ fontFamily: 'var(--font-mono)', wordBreak: 'break-all' }}>
+                  SHA-256 do PDF: {atoSelecionado.sha256Pdf}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </PainelRaioX>
     </div>
   );
 }

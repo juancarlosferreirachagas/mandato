@@ -36,6 +36,7 @@ import {
 import { EXTRATOS_CONTRATOS_DOM_REAIS } from '@/domain/diariosCatalogoReal';
 import { LINKS_OFICIAIS, urlConsultaCnpj } from '@/domain/plataforma';
 import { urlPdfOficialSegura } from '@/domain/seguranca';
+import { traduzirHistoricoPagamento } from '@/domain/linguagemCidada';
 import { useAsync } from '../hooks/useAsync';
 import { ErrorBox, Loading } from '../components/common';
 import { BarraHorizontal } from '../components/Graficos';
@@ -433,13 +434,27 @@ export function CredorDetalhePage() {
                         <td data-label="Empenho" style={{ fontFamily: 'var(--font-mono)', fontSize: '0.84rem' }}>
                           {p.nr_empenho ?? '—'}
                         </td>
-                        <td data-label="Descrição" style={{ maxWidth: 380 }}>
-                          <div style={{ fontSize: '0.86rem', color: 'var(--text-body)' }}>{p.descricao}</div>
-                          {p.modalidade_lic && p.modalidade_lic !== 'Não aplicável / Outros' && (
-                            <span className="fg-mini-tag" style={{ marginTop: 4, display: 'inline-block' }}>
-                              {p.modalidade_lic}
-                            </span>
-                          )}
+                        <td data-label="Descrição" style={{ maxWidth: 420 }}>
+                          {(() => {
+                            const trad = traduzirHistoricoPagamento(p.descricao);
+                            return (
+                              <>
+                                <div style={{ fontSize: '0.87rem', color: '#0f172a', lineHeight: 1.45 }}>
+                                  {trad.resumoLimpo}
+                                </div>
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 5 }}>
+                                  {p.modalidade_lic && p.modalidade_lic !== 'Não aplicável / Outros' && (
+                                    <span className="fg-mini-tag">{p.modalidade_lic}</span>
+                                  )}
+                                  {trad.tags.map((tg) => (
+                                    <span key={tg} className="fg-mini-tag">
+                                      {tg}
+                                    </span>
+                                  ))}
+                                </div>
+                              </>
+                            );
+                          })()}
                         </td>
                         <td data-label="Valor" className={`num fg-money ${estorno ? 'neg' : ''}`}>
                           {brl(p.valor_pago)}

@@ -71,6 +71,8 @@ export interface ConexaoEmpresaDom {
   pago2026: number;
   qtdPagamentosTce: number;
   trecho: string;
+  resumoSimples?: string;
+  textoIntegral?: string;
   pdfUrl: string;
   sha256Pdf: string | null;
 }

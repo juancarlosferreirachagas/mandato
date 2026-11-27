@@ -47,6 +47,7 @@ import { ErrorBox } from '../components/common';
 import { BarraHorizontal } from '../components/Graficos';
 import { GraficoAreaMensal, GraficoRoscaAreas } from '../components/GraficosModernos';
 import { AreaDetalheModal } from '../components/AreaDetalheModal';
+import { PainelIndicadoresAuditoria } from '../components/PainelIndicadoresAuditoria';
 import { PainelRaioX } from '../components/PainelRaioX';
 import { RaioXEmpresaSheet } from '../components/RaioXEmpresaSheet';
 import { GradeAreas } from '../components/AreasOrcamento';
@@ -288,6 +289,13 @@ export function HomePage() {
             </Link>
           ))}
         </div>
+      </section>
+
+      {/* =====================================================================
+          INDICADORES DE AUDITORIA PROFISSIONAL (PADRÃO CONTROLE EXTERNO)
+          ===================================================================== */}
+      <section className="fg-section">
+        <PainelIndicadoresAuditoria />
       </section>
 
       {/* =====================================================================

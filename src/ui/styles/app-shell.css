@@ -2390,3 +2390,175 @@ a.fg-mini-chip:hover, button.fg-mini-chip:hover { border-color: var(--gru-blue);
 .fg-page-skeleton {
   padding: 6px 0 32px;
 }
+
+
+/* ==========================================================================
+   PAINEL DE INDICADORES DE AUDITORIA PROFISSIONAL & CARDS LIMPOS DE FLUXO
+   ========================================================================== */
+.fg-audit-pro {
+  background: #ffffff;
+  border: 1.5px solid rgba(22, 43, 77, 0.14);
+  border-radius: 18px;
+  padding: 18px;
+}
+.fg-audit-pro__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.fg-audit-pro__kicker {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--gru-red);
+}
+.fg-audit-pro__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+@media (min-width: 640px) {
+  .fg-audit-pro__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (min-width: 1080px) {
+  .fg-audit-pro__grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+.fg-audit-pro__card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  border-radius: 14px;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 0.15s var(--ease-out), border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.fg-audit-pro__card:hover {
+  transform: translateY(-2px);
+  background: #ffffff;
+  border-color: var(--gru-blue);
+  box-shadow: 0 5px 0 -1px rgba(22, 43, 77, 0.1), 0 10px 22px rgba(22, 43, 77, 0.08);
+}
+.fg-audit-pro__top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fg-audit-pro__icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: #e0f2fe;
+  color: #0369a1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.fg-audit-pro__icon--amber { background: #fef3c7; color: #b45309; }
+.fg-audit-pro__icon--blue { background: #dbeafe; color: #1d4ed8; }
+.fg-audit-pro__icon--emerald { background: #d1fae5; color: #047857; }
+.fg-audit-pro__tag {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #475569;
+}
+.fg-audit-pro__metric {
+  font-family: var(--font-display, var(--font-sans));
+  font-size: 1.32rem;
+  font-weight: 800;
+  color: #09152b;
+  line-height: 1.15;
+}
+.fg-audit-pro__metric small {
+  display: block;
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  margin-top: 2px;
+}
+.fg-audit-pro__desc {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #475569;
+  line-height: 1.48;
+  flex: 1;
+}
+.fg-audit-pro__cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  color: var(--gru-blue);
+  margin-top: 2px;
+}
+
+/* Fluxo Compacto "De onde saiu -> Para onde foi" nos cards de decreto */
+.fg-flow-mini {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 11px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+.fg-flow-mini__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  font-size: 0.8rem;
+  line-height: 1.4;
+}
+.fg-flow-mini__row span {
+  font-weight: 800;
+  font-size: 0.73rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.fg-flow-mini__row--out span { color: #b91c1c; }
+.fg-flow-mini__row--in span { color: #047857; }
+.fg-flow-mini__row strong {
+  color: #0f172a;
+  font-weight: 600;
+}
+
+/* Resumo limpo sem poluição e caixa de texto integral no Raio-X */
+.fg-clean-card__summary-box {
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border-left: 3px solid var(--gru-blue);
+  font-size: 0.83rem;
+  color: #1e293b;
+  line-height: 1.5;
+}
+
+.fg-fulltext-box {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 0.84rem;
+  color: #1e293b;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
