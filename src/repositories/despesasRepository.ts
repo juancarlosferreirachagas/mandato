@@ -509,12 +509,10 @@ export const despesasRepository = {
         if (valor <= 0 && qtd <= 0) continue;
 
         if (termoNorm) {
-          const bateNome = normalizarTexto(c.credor).includes(termoNorm);
+          const termoLower = termoNorm.toLowerCase();
+          const bateIdx = c.searchIndex.includes(termoLower);
           const bateCnpj = termoDig.length > 0 && String(c.cnpj ?? '').includes(termoDig);
-          const bateArea = normalizarTexto(c.area).includes(termoNorm);
-          const bateMod = normalizarTexto(c.modalidadePrincipal).includes(termoNorm);
-          const bateContrato = c.contratosRef.some((cr) => normalizarTexto(cr).includes(termoNorm));
-          if (!bateNome && !bateCnpj && !bateArea && !bateMod && !bateContrato) continue;
+          if (!bateIdx && !bateCnpj) continue;
         }
 
         calculados.push({

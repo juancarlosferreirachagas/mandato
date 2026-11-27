@@ -2066,3 +2066,327 @@ a.fg-mini-chip:hover, button.fg-mini-chip:hover { border-color: var(--gru-blue);
   font-weight: 800;
   color: #09152b;
 }
+
+
+/* ==========================================================================
+   ACABAMENTO EDITORIAL TÁTIL + PAINEL RAIO-X SEM SAIR DA TELA (PALETA GUARULHOS)
+   Inspiração editorial limpa e tátil com 100% da paleta oficial de Guarulhos:
+   Azul Marinho (#162b4d), Azul Real (#1e5fa8), Vermelho (#c5221f) e Ouro (#d4a017).
+   ========================================================================== */
+
+/* Tipografia Editorial (Bricolage Grotesque) nos títulos e números-chave */
+.fg-hero__title,
+.fg-h2,
+.fg-page-title,
+.fg-sheet-title,
+.fg-modal__title,
+.fg-decree-card__title,
+.profile-hero__name {
+  font-family: var(--font-display, var(--font-sans));
+  letter-spacing: -0.025em;
+}
+
+/* Cartões com sensação tátil nítida (estilo documento carimbado, mantendo leveza) */
+.fg-card,
+.fg-clean-card,
+.fg-quick__item,
+.fg-kpi,
+.politico-card {
+  border: 1.5px solid rgba(22, 43, 77, 0.12);
+  transition: transform 0.16s var(--ease-out), border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.fg-quick__item:hover,
+.fg-clean-card:hover,
+.politico-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(22, 43, 77, 0.32);
+  box-shadow: 0 5px 0 -1px rgba(22, 43, 77, 0.1), 0 12px 24px rgba(22, 43, 77, 0.08);
+}
+
+.fg-quick__item:active,
+.fg-btn:active,
+.fg-pill:active {
+  transform: translateY(0) scale(0.985);
+}
+
+/* Selos "Carimbo Oficial" no rodapé */
+.fg-stamps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.fg-stamp {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 7px;
+  border: 1.5px dashed rgba(255, 255, 255, 0.34);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e2e8f0;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.fg-stamp--red {
+  border-color: rgba(248, 113, 113, 0.55);
+  color: #fecaca;
+  background: rgba(197, 34, 31, 0.22);
+}
+.fg-stamp--gold {
+  border-color: rgba(251, 191, 36, 0.55);
+  color: #fef08a;
+  background: rgba(212, 160, 23, 0.18);
+}
+
+/* Gatilho de nome clicável que abre o Raio-X sem sair da tela */
+.fg-name-trigger {
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  color: var(--gru-blue);
+  font-weight: 800;
+  text-align: left;
+  cursor: pointer;
+  text-decoration: underline;
+  text-decoration-color: rgba(30, 95, 168, 0.28);
+  text-underline-offset: 3px;
+  transition: color 0.14s ease, text-decoration-color 0.14s ease;
+}
+.fg-name-trigger:hover {
+  color: var(--gru-red);
+  text-decoration-color: var(--gru-red);
+}
+
+.fg-hbar-btn {
+  display: block;
+  width: 100%;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background 0.14s ease;
+}
+.fg-hbar-btn:hover {
+  background: #f8fafc;
+}
+
+/* ==========================================================================
+   PAINEL RAIO-X DESLIZANTE (SLIDE-OVER NO DESKTOP · BOTTOM SHEET NO MOBILE)
+   Sempre contido na viewport — nunca foge da tela!
+   ========================================================================== */
+.fg-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1550;
+  background: rgba(9, 21, 43, 0.56);
+  -webkit-backdrop-filter: blur(5px);
+  backdrop-filter: blur(5px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0;
+}
+
+.fg-sheet-panel {
+  width: 100%;
+  max-height: 89dvh;
+  background: #ffffff;
+  border-radius: 22px 22px 0 0;
+  border-top: 3px solid var(--gru-red);
+  box-shadow: 0 -16px 48px rgba(9, 21, 43, 0.28);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+.fg-sheet-handle {
+  display: flex;
+  justify-content: center;
+  padding: 9px 0 2px;
+  background: var(--gru-blue);
+}
+.fg-sheet-handle span {
+  width: 42px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.35);
+}
+
+@media (min-width: 768px) {
+  .fg-sheet-backdrop {
+    align-items: stretch;
+    justify-content: flex-end;
+    padding: 12px;
+  }
+  .fg-sheet-panel {
+    width: min(580px, 94vw);
+    max-height: calc(100dvh - 24px);
+    height: calc(100dvh - 24px);
+    border-radius: 20px;
+    border: 1.5px solid rgba(22, 43, 77, 0.2);
+    border-top: 4px solid var(--gru-red);
+    box-shadow: -12px 16px 54px rgba(9, 21, 43, 0.34);
+  }
+  .fg-sheet-handle {
+    display: none;
+  }
+}
+
+.fg-sheet-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 18px;
+  background: linear-gradient(135deg, #162b4d 0%, #10203b 100%);
+  color: #ffffff;
+  flex-shrink: 0;
+}
+.fg-sheet-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #fbbf24;
+  margin-bottom: 4px;
+}
+.fg-sheet-title {
+  margin: 0;
+  font-size: 1.18rem;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #ffffff;
+}
+.fg-sheet-sub {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: #cbd5e1;
+  font-family: var(--font-mono);
+}
+.fg-sheet-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.fg-sheet-close:hover {
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.fg-sheet-body {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 16px 18px;
+  background: #f8fafc;
+}
+
+.fg-sheet-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 18px calc(12px + env(safe-area-inset-bottom, 0px));
+  background: #ffffff;
+  border-top: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.fg-sheet-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.fg-sheet-kpi {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.fg-sheet-kpi span {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748b;
+}
+.fg-sheet-kpi strong {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  font-weight: 900;
+  color: #09152b;
+}
+.fg-sheet-kpi small {
+  font-size: 0.72rem;
+  color: #475569;
+}
+
+.fg-sheet-section {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: grid;
+  gap: 8px;
+}
+.fg-sheet-section__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--gru-blue);
+}
+.fg-sheet-item {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: grid;
+  gap: 6px;
+}
+.fg-sheet-item__top {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.82rem;
+}
+.fg-sheet-item__text {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #334155;
+  line-height: 1.48;
+}
+.fg-sheet-item__foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* Esqueleto de carregamento suave para rotas lazy */
+.fg-page-skeleton {
+  padding: 6px 0 32px;
+}

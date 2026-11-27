@@ -35,6 +35,7 @@ import {
 } from '@/services/baseIntegralService';
 import { EXTRATOS_CONTRATOS_DOM_REAIS } from '@/domain/diariosCatalogoReal';
 import { LINKS_OFICIAIS, urlConsultaCnpj } from '@/domain/plataforma';
+import { urlPdfOficialSegura } from '@/domain/seguranca';
 import { useAsync } from '../hooks/useAsync';
 import { ErrorBox, Loading } from '../components/common';
 import { BarraHorizontal } from '../components/Graficos';
@@ -791,11 +792,18 @@ export function CredorDetalhePage() {
             <div className="fg-pdf-mobile-tip">
               No celular, caso o leitor embutido não exiba a página exata, toque em <strong>“Abrir em nova aba”</strong>.
             </div>
-            <iframe
-              src={pdfPreview.url}
-              title={pdfPreview.titulo}
-              style={{ width: '100%', flex: 1, border: 0, background: '#f1f5f9' }}
-            />
+            {urlPdfOficialSegura(pdfPreview.url) ? (
+              <iframe
+                src={urlPdfOficialSegura(pdfPreview.url)!}
+                title={pdfPreview.titulo}
+                referrerPolicy="no-referrer"
+                style={{ width: '100%', flex: 1, border: 0, background: '#f1f5f9' }}
+              />
+            ) : (
+              <div style={{ padding: 24, textAlign: 'center', color: '#475569' }}>
+                Link fora do domínio oficial validado. Use “Abrir em nova aba”.
+              </div>
+            )}
           </div>
         </div>
       )}

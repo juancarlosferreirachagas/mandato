@@ -15,7 +15,7 @@ export interface ResumoModalidadeLicitacao {
 }
 
 export const RESUMO_CONEXOES_OFICIAIS = {
-  "geradoEm": "2026-11-27T00:43:48.659Z",
+  "geradoEm": "2026-11-27T01:06:55.451Z",
   "totalCredoresUnicos": 6741,
   "totalCredoresExternos": 6723,
   "totalPagamentos2025": 38874,

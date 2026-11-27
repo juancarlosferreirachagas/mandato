@@ -349,6 +349,13 @@ export function PublicLayout() {
             </nav>
           </div>
 
+          <div className="fg-stamps" aria-label="Selos de integridade editorial">
+            <span className="fg-stamp">sem partido</span>
+            <span className="fg-stamp fg-stamp--red">dado oficial tce-sp</span>
+            <span className="fg-stamp fg-stamp--gold">222 pdfs sha-256</span>
+            <span className="fg-stamp">lgpd aplicada</span>
+          </div>
+
           <p className="fg-footer__legal">
             <strong>Como trabalhamos:</strong> fato → fonte → dado conferível. As informações vêm das prestações de
             contas enviadas ao TCE-SP (Audesp) e das edições do Diário Oficial de {PLATAFORMA.municipio}, seguindo a Lei

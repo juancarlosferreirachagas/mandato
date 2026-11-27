@@ -1,58 +1,131 @@
 /**
  * ============================================================================
- * ROTEADOR PRINCIPAL DA APLICAÇÃO (REACT ROUTER v6)
+ * ROTEADOR PRINCIPAL COM CODE-SPLITTING POR ROTA (REACT.LAZY + SUSPENSE)
  * Projeto: Fiscaliza Guarulhos (IBGE 3518800)
  * ============================================================================
- *
- * Mapeia todas as rotas públicas de auditoria cidadã sob o layout institucional
- * `PublicLayout`, incluindo redirecionamentos de compatibilidade retroativa.
+ * Cada página é carregada sob demanda, reduzindo drasticamente o consumo de
+ * dados móveis e a latência inicial. A Home abre imediata e as demais rotas
+ * entram com esqueleto editorial suave.
  * ============================================================================
  */
 
+import { lazy, Suspense } from 'react';
 import { Route, Routes, Navigate } from 'react-router-dom';
 import { PublicLayout } from './layout/PublicLayout';
 import { HomePage } from './pages/HomePage';
-import { DespesasPage } from './pages/DespesasPage';
-import { CredorDetalhePage } from './pages/CredorDetalhePage';
-import { DecretosAuditoriaPage } from './pages/DecretosAuditoriaPage';
-import { PerfilPage } from './pages/PerfilPage';
-import { SecaoPage } from './pages/SecaoPage';
-import { NotFoundPage } from './pages/NotFoundPage';
 import { SECOES } from './navigation';
-import { PoliticosPage } from './pages/PoliticosPage';
-import { FinancasPage } from './pages/FinancasPage';
-import { PoliticaPrivacidadePage } from './pages/PoliticaPrivacidadePage';
+
+const FinancasPage = lazy(() =>
+  import('./pages/FinancasPage').then((m) => ({ default: m.FinancasPage }))
+);
+const DespesasPage = lazy(() =>
+  import('./pages/DespesasPage').then((m) => ({ default: m.DespesasPage }))
+);
+const CredorDetalhePage = lazy(() =>
+  import('./pages/CredorDetalhePage').then((m) => ({ default: m.CredorDetalhePage }))
+);
+const DecretosAuditoriaPage = lazy(() =>
+  import('./pages/DecretosAuditoriaPage').then((m) => ({ default: m.DecretosAuditoriaPage }))
+);
+const PoliticosPage = lazy(() =>
+  import('./pages/PoliticosPage').then((m) => ({ default: m.PoliticosPage }))
+);
+const PerfilPage = lazy(() =>
+  import('./pages/PerfilPage').then((m) => ({ default: m.PerfilPage }))
+);
+const SecaoPage = lazy(() =>
+  import('./pages/SecaoPage').then((m) => ({ default: m.SecaoPage }))
+);
+const PoliticaPrivacidadePage = lazy(() =>
+  import('./pages/PoliticaPrivacidadePage').then((m) => ({ default: m.PoliticaPrivacidadePage }))
+);
+const NotFoundPage = lazy(() =>
+  import('./pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage }))
+);
+
+function PaginaEsqueleto() {
+  return (
+    <div className="fg-page-skeleton" aria-label="Carregando página" aria-busy="true">
+      <div className="fg-skeleton" style={{ height: 156, borderRadius: 18, marginBottom: 18 }} />
+      <div className="fg-grid-2">
+        <div className="fg-skeleton" style={{ height: 220, borderRadius: 14 }} />
+        <div className="fg-skeleton" style={{ height: 220, borderRadius: 14 }} />
+      </div>
+    </div>
+  );
+}
 
 export function App() {
   return (
     <Routes>
       <Route element={<PublicLayout />}>
-        {/* Página Inicial — Painel Executivo de Auditoria Municipal */}
         <Route index element={<HomePage />} />
 
-        {/* Balanço Orçamentário: Receitas Arrecadadas x Despesas Pagas */}
-        <Route path="financas" element={<FinancasPage />} />
+        <Route
+          path="financas"
+          element={
+            <Suspense fallback={<PaginaEsqueleto />}>
+              <FinancasPage />
+            </Suspense>
+          }
+        />
 
-        {/* Ranking Paginado de Fornecedores e Dossiê Individual de Credores */}
-        <Route path="despesas" element={<DespesasPage />} />
-        <Route path="despesas/credor/:chave" element={<CredorDetalhePage />} />
+        <Route
+          path="despesas"
+          element={
+            <Suspense fallback={<PaginaEsqueleto />}>
+              <DespesasPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="despesas/credor/:chave"
+          element={
+            <Suspense fallback={<PaginaEsqueleto />}>
+              <CredorDetalhePage />
+            </Suspense>
+          }
+        />
 
-        {/* Auditoria de Decretos Orçamentários (De Onde Saiu -> Para Onde Foi) & Diários Extraídos */}
-        <Route path="decretos" element={<DecretosAuditoriaPage />} />
+        <Route
+          path="decretos"
+          element={
+            <Suspense fallback={<PaginaEsqueleto />}>
+              <DecretosAuditoriaPage />
+            </Suspense>
+          }
+        />
         <Route path="auditoria" element={<Navigate to="/decretos" replace />} />
 
-        {/* Crachá Cívico: Prefeito, Vice e 34 Vereadores da 19ª Legislatura */}
-        <Route path="politicos" element={<PoliticosPage />} />
-        <Route path="politicos/:id" element={<PerfilPage />} />
+        <Route
+          path="politicos"
+          element={
+            <Suspense fallback={<PaginaEsqueleto />}>
+              <PoliticosPage />
+            </Suspense>
+          }
+        />
+        <Route
+          path="politicos/:id"
+          element={
+            <Suspense fallback={<PaginaEsqueleto />}>
+              <PerfilPage />
+            </Suspense>
+          }
+        />
 
-        {/* Conformidade Legal, Segurança e LGPD */}
-        <Route path="privacidade" element={<PoliticaPrivacidadePage />} />
+        <Route
+          path="privacidade"
+          element={
+            <Suspense fallback={<PaginaEsqueleto />}>
+              <PoliticaPrivacidadePage />
+            </Suspense>
+          }
+        />
 
-        {/* Redirecionamentos amigáveis de rotas legadas */}
         <Route path="guarulhos/orcamento" element={<Navigate to="/despesas" replace />} />
         <Route path="mapa" element={<Navigate to="/" replace />} />
 
-        {/* Central de Fontes Validadas em Tempo Real (/fontes) */}
         {SECOES.filter(
           (s) =>
             s.path !== '' &&
@@ -63,11 +136,25 @@ export function App() {
             s.path !== 'financas' &&
             s.path !== 'privacidade'
         ).map((s) => (
-          <Route key={s.path} path={s.path} element={<SecaoPage secao={s} />} />
+          <Route
+            key={s.path}
+            path={s.path}
+            element={
+              <Suspense fallback={<PaginaEsqueleto />}>
+                <SecaoPage secao={s} />
+              </Suspense>
+            }
+          />
         ))}
 
-        {/* Fallback 404 */}
-        <Route path="*" element={<NotFoundPage />} />
+        <Route
+          path="*"
+          element={
+            <Suspense fallback={<PaginaEsqueleto />}>
+              <NotFoundPage />
+            </Suspense>
+          }
+        />
       </Route>
     </Routes>
   );

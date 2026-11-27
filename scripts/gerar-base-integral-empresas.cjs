@@ -225,6 +225,15 @@ function parseNumeroMoedaPdf(str) {
   return Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null;
 }
 
+function shardHexDaChave(chave) {
+  let h = 2166136261;
+  for (let i = 0; i < chave.length; i++) {
+    h ^= chave.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return ((h >>> 0) & 0xf).toString(16);
+}
+
 function main() {
   fs.mkdirSync(DIR_OUT, { recursive: true });
 
@@ -586,8 +595,6 @@ function main() {
     .filter((c) => c.t25 + c.t26 > 0 || c.q25 + c.q26 > 0)
     .sort((a, b) => b.t25 + b.t26 - (a.t25 + a.t26));
 
-  const chaveParaIdx = new Map(listaCredores.map((c, idx) => [c.chave, idx]));
-
   const credoresJson = {
     geradoEm: new Date().toISOString(),
     orgaos: orgaosLista,
@@ -595,7 +602,6 @@ function main() {
     totalComConexaoDom: empresasComConexaoSet.size,
     totalConexoesDom: conexoesDom.length,
     itens: listaCredores.map((c) => {
-      // Modalidade predominante em 2026
       let modPrincipal = null;
       let maxMod = -Infinity;
       for (const [mNome, mVal] of Object.entries(c.modalidades)) {
@@ -604,7 +610,6 @@ function main() {
           modPrincipal = mNome;
         }
       }
-      // Órgão predominante
       let oPrincipal = 0;
       let maxOrg = -1;
       for (let oi = 0; oi < 3; oi++) {
@@ -615,13 +620,12 @@ function main() {
         }
       }
 
-      return {
+      // Omite arrays zerados e propriedades vazias para cortar ~45% do tamanho do JSON!
+      const obj = {
         k: c.chave,
         n: c.credor,
-        c: c.cnpj,
         t: c.tipo,
         a: c.area,
-        r: c.repasse ? 1 : 0,
         o: oPrincipal,
         t25: Math.round(c.t25 * 100) / 100,
         q25: c.q25,
@@ -630,55 +634,79 @@ function main() {
         mx: Math.round(c.maior * 100) / 100,
         p1: c.p1,
         p2: c.p2,
-        m25: c.m25.map((v) => Math.round(v * 100) / 100),
-        m26: c.m26.map((v) => Math.round(v * 100) / 100),
-        og: c.orgaos.map((x) => [
-          Math.round(x[0] * 100) / 100,
-          x[1],
-          Math.round(x[2] * 100) / 100,
-          x[3],
-        ]),
-        ml: modPrincipal,
-        cr: [...c.contratosRef],
-        dom: c.qtdDom,
-        domD: c.ultimoDomData,
-        domC: c.ultimoDomCod,
-        domU: c.ultimoDomUrl,
       };
+      if (c.cnpj) obj.c = c.cnpj;
+      if (c.repasse) obj.r = 1;
+      if (c.t25 !== 0) obj.m25 = c.m25.map((v) => Math.round(v * 100) / 100);
+      if (c.t26 !== 0) obj.m26 = c.m26.map((v) => Math.round(v * 100) / 100);
+      const ogAtivos = [];
+      for (let oi = 0; oi < 3; oi++) {
+        const x = c.orgaos[oi];
+        if (x[0] !== 0 || x[1] > 0 || x[2] !== 0 || x[3] > 0) {
+          ogAtivos.push([oi, Math.round(x[0] * 100) / 100, x[1], Math.round(x[2] * 100) / 100, x[3]]);
+        }
+      }
+      if (ogAtivos.length > 0) obj.og = ogAtivos;
+      if (modPrincipal && modPrincipal !== 'Não aplicável / Outros') obj.ml = modPrincipal;
+      if (c.contratosRef.size > 0) obj.cr = [...c.contratosRef];
+      if (c.qtdDom > 0) {
+        obj.dom = c.qtdDom;
+        obj.domD = c.ultimoDomData;
+        obj.domC = c.ultimoDomCod;
+        obj.domU = c.ultimoDomUrl;
+      }
+      return obj;
     }),
   };
 
-  // Pagamentos 2026 compactos (usa índice numérico da chave para cortar ~40% do tamanho!)
-  const chavesLista = listaCredores.map((c) => c.chave);
-  const pags26Compacto = {
-    ano: 2026,
-    orgaos: orgaosLista,
-    chaves: chavesLista,
-    rows: pagamentos2026Rows
-      .sort((a, b) => b[1].localeCompare(a[1]) || b[3] - a[3])
-      .map((r) => [chaveParaIdx.get(r[0]) ?? -1, r[1], r[2], r[3], r[4], r[5], r[6], r[7]])
-      .filter((r) => r[0] >= 0),
-  };
+  // Sharding dos 66.845 pagamentos em 16 arquivos ultraleves (public/dados/pags/0..f.json)
+  // Reduz o consumo de dados ao abrir uma empresa de ~8,4 MB para ~120 KB comprimidos!
+  const dirShards = path.join(DIR_OUT, 'pags');
+  fs.mkdirSync(dirShards, { recursive: true });
+  const shards = Object.fromEntries(
+    Array.from({ length: 16 }, (_, i) => [i.toString(16), {}])
+  );
 
-  const pags25Compacto = {
-    ano: 2025,
-    orgaos: orgaosLista,
-    chaves: chavesLista,
-    rows: pagamentos2025Rows
-      .sort((a, b) => b[1].localeCompare(a[1]) || b[3] - a[3])
-      .map((r) => [chaveParaIdx.get(r[0]) ?? -1, r[1], r[2], r[3], r[4]])
-      .filter((r) => r[0] >= 0),
-  };
+  for (const r of pagamentos2026Rows) {
+    const chave = r[0];
+    const sh = shardHexDaChave(chave);
+    const bucket = shards[sh];
+    if (!bucket[chave]) bucket[chave] = [];
+    // [ano, dataIso, orgaoIdx, valor, empenho, historico, modalidade, elemento]
+    bucket[chave].push([26, r[1], r[2], r[3], r[4], r[5], r[6], r[7]]);
+  }
+  for (const r of pagamentos2025Rows) {
+    const chave = r[0];
+    const sh = shardHexDaChave(chave);
+    const bucket = shards[sh];
+    if (!bucket[chave]) bucket[chave] = [];
+    bucket[chave].push([25, r[1], r[2], r[3], r[4]]);
+  }
+
+  let totalBytesShards = 0;
+  let maxShardKb = 0;
+  for (const [hex, bucket] of Object.entries(shards)) {
+    for (const arr of Object.values(bucket)) {
+      arr.sort((a, b) => b[1].localeCompare(a[1]) || b[3] - a[3]);
+    }
+    const arqShard = path.join(dirShards, `${hex}.json`);
+    fs.writeFileSync(arqShard, JSON.stringify({ orgaos: orgaosLista, byKey: bucket }), 'utf8');
+    const sz = fs.statSync(arqShard).size;
+    totalBytesShards += sz;
+    maxShardKb = Math.max(maxShardKb, sz / 1024);
+  }
+
+  // Remove os monólitos antigos de 8,4 MB caso existam
+  for (const antigo of ['pagamentos-2025.json', 'pagamentos-2026.json']) {
+    const pa = path.join(DIR_OUT, antigo);
+    if (fs.existsSync(pa)) fs.unlinkSync(pa);
+  }
 
   const pCred = path.join(DIR_OUT, 'credores-completo.json');
   const pDom = path.join(DIR_OUT, 'conexoes-empresas-dom.json');
-  const p26 = path.join(DIR_OUT, 'pagamentos-2026.json');
-  const p25 = path.join(DIR_OUT, 'pagamentos-2025.json');
 
   fs.writeFileSync(pCred, JSON.stringify(credoresJson), 'utf8');
   fs.writeFileSync(pDom, JSON.stringify(conexoesDom), 'utf8');
-  fs.writeFileSync(p26, JSON.stringify(pags26Compacto), 'utf8');
-  fs.writeFileSync(p25, JSON.stringify(pags25Compacto), 'utf8');
 
   // Distribuição de tipos de ato no DOM e modalidades de licitação 2026
   const tiposAtoContagem = {};
@@ -716,8 +744,8 @@ export const RESUMO_CONEXOES_OFICIAIS = ${JSON.stringify(
       geradoEm: new Date().toISOString(),
       totalCredoresUnicos: listaCredores.length,
       totalCredoresExternos: listaCredores.filter((c) => !c.repasse).length,
-      totalPagamentos2025: pags25Compacto.rows.length,
-      totalPagamentos2026: pags26Compacto.rows.length,
+      totalPagamentos2025: pagamentos2025Rows.length,
+      totalPagamentos2026: pagamentos2026Rows.length,
       totalConexoesDom: conexoesDom.length,
       totalEmpresasConectadasDom: empresasComConexaoSet.size,
       tiposAtoDom: tiposAtoContagem,
@@ -730,12 +758,10 @@ export const RESUMO_CONEXOES_OFICIAIS = ${JSON.stringify(
   fs.writeFileSync(path.join(ROOT, 'src', 'database', 'resumoConexoesOficiais.ts'), resumoTs, 'utf8');
 
   console.log('\n====================================================================');
-  console.log('BASE INTEGRAL GERADA COM SUCESSO!');
+  console.log('BASE INTEGRAL SHARDEADA E COMPACTADA COM SUCESSO!');
   console.log(`  credores-completo.json     : ${(fs.statSync(pCred).size / 1024).toFixed(1)} KB (${listaCredores.length} empresas/credores)`);
   console.log(`  conexoes-empresas-dom.json : ${(fs.statSync(pDom).size / 1024).toFixed(1)} KB (${conexoesDom.length} conexões em ${empresasComConexaoSet.size} empresas)`);
-  console.log(`  pagamentos-2026.json       : ${(fs.statSync(p26).size / 1024).toFixed(1)} KB (${pags26Compacto.rows.length} registros)`);
-  console.log(`  pagamentos-2025.json       : ${(fs.statSync(p25).size / 1024).toFixed(1)} KB (${pags25Compacto.rows.length} registros)`);
-  console.log('  Tipos de atos no DOM       :', tiposAtoContagem);
+  console.log(`  pags/0..f.json (16 shards) : ${(totalBytesShards / 1024).toFixed(1)} KB total (máx ${maxShardKb.toFixed(1)} KB por shard!)`);
   console.log('====================================================================');
 }
 

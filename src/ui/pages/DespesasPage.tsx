@@ -37,6 +37,8 @@ import {
 } from 'lucide-react';
 import { StatusBanco } from '../components/StatusFontes';
 import { PaginacaoModerna } from '../components/PaginacaoModerna';
+import { RaioXEmpresaSheet } from '../components/RaioXEmpresaSheet';
+import { urlPdfOficialSegura } from '@/domain/seguranca';
 import { despesasRepository, type CredorRanking } from '@/repositories/despesasRepository';
 import {
   carregarConexoesDom,
@@ -138,6 +140,7 @@ export function DespesasPage() {
     url: string;
     sha256?: string | null;
   } | null>(null);
+  const [raioXChave, setRaioXChave] = useState<string | null>(null);
 
   useEffect(() => {
     if (!pdfPreview) return;
@@ -288,7 +291,14 @@ export function DespesasPage() {
           return (
             <div>
               <div className="fg-cell-name">
-                <Link to={`/despesas/credor/${c.chave}`}>{nomeLegivel(c.credor)}</Link>
+                <button
+                  type="button"
+                  className="fg-name-trigger"
+                  onClick={() => setRaioXChave(c.chave)}
+                  title="Abrir Raio-X rápido sem sair da lista"
+                >
+                  {nomeLegivel(c.credor)}
+                </button>
                 {c.repasse_interno && (
                   <span className="fg-tag fg-tag--warn">Repasse interno</span>
                 )}
@@ -369,15 +379,27 @@ export function DespesasPage() {
       }),
       colHelper.display({
         id: 'acoes',
-        header: () => <span>Dossiê</span>,
+        header: () => <span>Raio-X</span>,
         cell: (info) => (
-          <Link
-            to={`/despesas/credor/${info.row.original.chave}`}
-            className="fg-btn fg-btn--sm"
-          >
-            <FileCheck2 size={13} aria-hidden />
-            <span>Abrir</span>
-          </Link>
+          <div style={{ display: 'inline-flex', gap: 6, justifyContent: 'flex-end' }}>
+            <button
+              type="button"
+              className="fg-btn fg-btn--sm"
+              onClick={() => setRaioXChave(info.row.original.chave)}
+              title="Ver resumo, gráfico 2025×2026 e pagamentos sem sair da tela"
+            >
+              <Eye size={13} aria-hidden />
+              <span>Raio-X</span>
+            </button>
+            <Link
+              to={`/despesas/credor/${info.row.original.chave}`}
+              className="fg-btn fg-btn--primary fg-btn--sm"
+              title="Abrir página completa da empresa"
+            >
+              <FileCheck2 size={13} aria-hidden />
+              <span>Dossiê</span>
+            </Link>
+          </div>
         ),
       }),
     ],
@@ -977,9 +999,13 @@ export function DespesasPage() {
 
                     <div>
                       <h3 className="fg-clean-card__title">
-                        <Link to={`/despesas/credor/${cx.chave}`} style={{ color: 'inherit', textDecoration: 'none' }}>
+                        <button
+                          type="button"
+                          className="fg-name-trigger"
+                          onClick={() => setRaioXChave(cx.chave)}
+                        >
                           {nomeLegivel(cx.credor)}
-                        </Link>
+                        </button>
                       </h3>
                       <div className="fg-cell-sub" style={{ marginTop: 2 }}>
                         CNPJ {formatarCnpj(cx.cnpj)} · {cx.area} · {inteiro(cx.qtdPagamentosTce)} pag.
@@ -1021,10 +1047,14 @@ export function DespesasPage() {
                           <span>Abrir</span>
                           <ArrowUpRight size={12} aria-hidden />
                         </a>
-                        <Link to={`/despesas/credor/${cx.chave}`} className="fg-btn fg-btn--primary fg-btn--sm">
-                          <span>Dossiê</span>
+                        <button
+                          type="button"
+                          className="fg-btn fg-btn--primary fg-btn--sm"
+                          onClick={() => setRaioXChave(cx.chave)}
+                        >
+                          <span>Raio-X</span>
                           <ArrowRight size={13} aria-hidden />
-                        </Link>
+                        </button>
                       </div>
                     </div>
                   </article>
@@ -1103,14 +1133,24 @@ export function DespesasPage() {
             <div className="fg-pdf-mobile-tip">
               No celular, caso o leitor embutido não exiba a página exata, toque em <strong>“Abrir em nova aba”</strong>.
             </div>
-            <iframe
-              src={pdfPreview.url}
-              title={pdfPreview.titulo}
-              style={{ width: '100%', flex: 1, border: 0, background: '#f1f5f9' }}
-            />
+            {urlPdfOficialSegura(pdfPreview.url) ? (
+              <iframe
+                src={urlPdfOficialSegura(pdfPreview.url)!}
+                title={pdfPreview.titulo}
+                referrerPolicy="no-referrer"
+                style={{ width: '100%', flex: 1, border: 0, background: '#f1f5f9' }}
+              />
+            ) : (
+              <div style={{ padding: 24, textAlign: 'center', color: '#475569' }}>
+                Link fora do domínio oficial validado. Use “Abrir em nova aba”.
+              </div>
+            )}
           </div>
         </div>
       )}
+
+      {/* Raio-X deslizante sem sair da tela */}
+      <RaioXEmpresaSheet chave={raioXChave} onFechar={() => setRaioXChave(null)} />
     </div>
   );
 }

@@ -71,6 +71,7 @@ import { StatusBanco } from '../components/StatusFontes';
 import { PaginacaoModerna } from '../components/PaginacaoModerna';
 import { exportarCsvPlanilha } from '@/services/baseIntegralService';
 import { RESUMO_CONEXOES_OFICIAIS } from '@/database/resumoConexoesOficiais';
+import { urlPdfOficialSegura } from '@/domain/seguranca';
 import { useAsync } from '../hooks/useAsync';
 import { brl, brlCompacto, dataBr, dataHoraBr, formatarCnpj, inteiro, mesAbrev, mesNome, nomeLegivel } from '../format';
 import {
@@ -2378,11 +2379,18 @@ export function DecretosAuditoriaPage() {
             <div className="fg-pdf-mobile-tip">
               No celular, caso o leitor embutido não exiba todas as páginas, toque em <strong>“Abrir em nova aba”</strong>.
             </div>
-            <iframe
-              src={pdfPreview.url}
-              title={pdfPreview.titulo}
-              style={{ width: '100%', flex: 1, border: 0, background: '#f1f5f9' }}
-            />
+            {urlPdfOficialSegura(pdfPreview.url) ? (
+              <iframe
+                src={urlPdfOficialSegura(pdfPreview.url)!}
+                title={pdfPreview.titulo}
+                referrerPolicy="no-referrer"
+                style={{ width: '100%', flex: 1, border: 0, background: '#f1f5f9' }}
+              />
+            ) : (
+              <div style={{ padding: 24, textAlign: 'center', color: '#475569' }}>
+                Link fora do domínio oficial validado. Use “Abrir em nova aba”.
+              </div>
+            )}
           </div>
         </div>
       )}

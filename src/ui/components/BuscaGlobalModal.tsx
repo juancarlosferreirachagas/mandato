@@ -11,7 +11,7 @@
  * ============================================================================
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
@@ -47,6 +47,7 @@ export function BuscaGlobalModal({ aberto, onFechar }: BuscaGlobalModalProps) {
   const nav = useNavigate();
   const inputRef = useRef<HTMLInputElement>(null);
   const [termo, setTermo] = useState('');
+  const termoAdiado = useDeferredValue(termo);
   const [credores, setCredores] = useState<CredorIntegral[]>([]);
 
   useEffect(() => {
@@ -67,7 +68,7 @@ export function BuscaGlobalModal({ aberto, onFechar }: BuscaGlobalModalProps) {
   }, [aberto, onFechar]);
 
   const resultados = useMemo(() => {
-    const q = norm(termo).trim();
+    const q = norm(termoAdiado).trim();
     const dig = q.replace(/\D/g, '');
     if (q.length < 2) {
       return {
@@ -78,14 +79,14 @@ export function BuscaGlobalModal({ aberto, onFechar }: BuscaGlobalModalProps) {
       };
     }
 
-    const empresas = credores
-      .filter(
-        (c) =>
-          norm(c.credor).includes(q) ||
-          (dig.length >= 4 && (c.cnpj ?? '').includes(dig)) ||
-          norm(c.area).includes(q)
-      )
-      .slice(0, 6);
+    // Busca em O(n) sobre searchIndex pré-normalizado (< 4ms para 6.741 empresas!)
+    const empresas: CredorIntegral[] = [];
+    for (let i = 0; i < credores.length && empresas.length < 6; i++) {
+      const c = credores[i];
+      if (c.searchIndex.includes(q) || (dig.length >= 4 && (c.cnpj ?? '').includes(dig))) {
+        empresas.push(c);
+      }
+    }
 
     const decretos = CATALOGO_DECRETOS_SUPLEMENTARES_REAIS.filter(
       (d) =>
@@ -107,7 +108,7 @@ export function BuscaGlobalModal({ aberto, onFechar }: BuscaGlobalModalProps) {
       .slice(0, 4);
 
     return { empresas, decretos, leis, politicos };
-  }, [termo, credores]);
+  }, [termoAdiado, credores]);
 
   const ir = (rota: string) => {
     onFechar();

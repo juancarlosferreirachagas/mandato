@@ -30,7 +30,10 @@ import {
 } from 'lucide-react';
 import { StatusBanco } from '../components/StatusFontes';
 import { despesasRepository, type DespesaPorArea } from '@/repositories/despesasRepository';
-import { DECRETOS_ORCAMENTARIOS_AUDITADOS } from '@/domain/decretosOrcamentarios';
+import {
+  DECRETOS_ORCAMENTARIOS_AUDITADOS,
+  type DecretoOrcamentarioAuditado,
+} from '@/domain/decretosOrcamentarios';
 import {
   PLATAFORMA,
   QTD_DECRETOS,
@@ -44,6 +47,8 @@ import { ErrorBox } from '../components/common';
 import { BarraHorizontal } from '../components/Graficos';
 import { GraficoAreaMensal, GraficoRoscaAreas } from '../components/GraficosModernos';
 import { AreaDetalheModal } from '../components/AreaDetalheModal';
+import { PainelRaioX } from '../components/PainelRaioX';
+import { RaioXEmpresaSheet } from '../components/RaioXEmpresaSheet';
 import { GradeAreas } from '../components/AreasOrcamento';
 import { brl, brlCompacto, dataBr, inteiro, nomeLegivel, nomeOrgaoCurto, mesNome } from '../format';
 import { RESUMO_CONEXOES_OFICIAIS } from '@/database/resumoConexoesOficiais';
@@ -128,6 +133,8 @@ export function HomePage() {
   const [q, setQ] = useState('');
   const [anoHome, setAnoHome] = useState<AnoHome>(2026);
   const [areaSelecionada, setAreaSelecionada] = useState<DespesaPorArea | null>(null);
+  const [raioXEmpresa, setRaioXEmpresa] = useState<string | null>(null);
+  const [decretoRaioX, setDecretoRaioX] = useState<DecretoOrcamentarioAuditado | null>(null);
   const { data, loading, error } = useAsync(() => carregar(anoHome), [anoHome]);
 
   const buscar = (e: React.FormEvent) => {
@@ -340,9 +347,13 @@ export function HomePage() {
                   <div style={{ fontFamily: 'var(--font-mono)', fontWeight: 800, fontSize: '0.98rem', color: '#09152b' }}>
                     {brlCompacto(dec.valorTotal)}
                   </div>
-                  <Link to={`/decretos?decreto=${encodeURIComponent(dec.id)}`} className="fg-link" style={{ fontSize: '0.78rem' }}>
-                    Ver detalhes →
-                  </Link>
+                  <button
+                    type="button"
+                    className="fg-link-btn"
+                    onClick={() => setDecretoRaioX(dec)}
+                  >
+                    <span>Raio-X rápido →</span>
+                  </button>
                 </div>
               </div>
             ))}
@@ -451,14 +462,20 @@ export function HomePage() {
                   </Link>
                 </div>
                 {data.top.map((t, i) => (
-                  <BarraHorizontal
+                  <button
                     key={t.chave}
-                    nome={`${i + 1}. ${nomeLegivel(t.credor)}`}
-                    valor={t.total_liquido}
-                    max={maxTop}
-                    meta={`${inteiro(t.qtd)} pagamentos${t.cnpj_credor ? '' : ' · pessoa física'}`}
-                    to={`/despesas/credor/${t.chave}`}
-                  />
+                    type="button"
+                    className="fg-hbar-btn"
+                    onClick={() => setRaioXEmpresa(t.chave)}
+                    title="Toque para abrir o Raio-X rápido sem sair da página inicial"
+                  >
+                    <BarraHorizontal
+                      nome={`${i + 1}. ${nomeLegivel(t.credor)}`}
+                      valor={t.total_liquido}
+                      max={maxTop}
+                      meta={`${inteiro(t.qtd)} pagamentos${t.cnpj_credor ? '' : ' · pessoa física'} · toque para Raio-X`}
+                    />
+                  </button>
                 ))}
               </div>
             </section>
@@ -474,6 +491,84 @@ export function HomePage() {
           onClose={() => setAreaSelecionada(null)}
         />
       )}
+
+      <RaioXEmpresaSheet chave={raioXEmpresa} onFechar={() => setRaioXEmpresa(null)} />
+
+      <PainelRaioX
+        aberto={Boolean(decretoRaioX)}
+        onFechar={() => setDecretoRaioX(null)}
+        eyebrow={decretoRaioX ? `${decretoRaioX.edicaoDiarioOficial} · ${decretoRaioX.rotuloModalidade}` : undefined}
+        titulo={decretoRaioX ? decretoRaioX.numeroDecreto : ''}
+        subtitulo={decretoRaioX ? `${dataBr(decretoRaioX.dataPublicacao)} · ${brl(decretoRaioX.valorTotal)}` : undefined}
+        rodape={
+          decretoRaioX ? (
+            <>
+              <a
+                href={decretoRaioX.urlDiarioOficial}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="fg-btn fg-btn--sm"
+              >
+                <span>Abrir PDF ({decretoRaioX.paginaDiario}) ↗</span>
+              </a>
+              <Link
+                to={`/decretos?decreto=${encodeURIComponent(decretoRaioX.id)}`}
+                className="fg-btn fg-btn--primary fg-btn--sm"
+                onClick={() => setDecretoRaioX(null)}
+              >
+                <span>Ver auditoria completa →</span>
+              </Link>
+            </>
+          ) : undefined
+        }
+      >
+        {decretoRaioX && (
+          <div style={{ display: 'grid', gap: 14 }}>
+            <div className="fg-sheet-item">
+              <strong style={{ display: 'block', marginBottom: 4, color: '#09152b' }}>
+                {decretoRaioX.tituloObjetivo}
+              </strong>
+              <p className="fg-sheet-item__text">{decretoRaioX.resumoExplicativo}</p>
+            </div>
+
+            <div className="fg-sheet-section">
+              <div className="fg-sheet-section__head" style={{ color: '#b91c1c' }}>
+                <TrendingDown size={14} aria-hidden />
+                <span>De onde saiu a verba (Art. 2º)</span>
+              </div>
+              {decretoRaioX.origens.map((o, i) => (
+                <div key={i} className="fg-sheet-item">
+                  <div className="fg-sheet-item__top">
+                    <strong>{o.orgaoOrigem}</strong>
+                    <strong className="fg-money neg" style={{ marginLeft: 'auto' }}>
+                      {brl(o.valor)}
+                    </strong>
+                  </div>
+                  <p className="fg-sheet-item__text">{o.impactoOrigemCidadao}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="fg-sheet-section">
+              <div className="fg-sheet-section__head" style={{ color: '#047857' }}>
+                <TrendingUp size={14} aria-hidden />
+                <span>Para onde foi a verba (Art. 1º)</span>
+              </div>
+              {decretoRaioX.destinos.map((d, i) => (
+                <div key={i} className="fg-sheet-item">
+                  <div className="fg-sheet-item__top">
+                    <strong>{d.orgaoDestino}</strong>
+                    <strong className="fg-money" style={{ marginLeft: 'auto', color: '#047857' }}>
+                      + {brl(d.valor)}
+                    </strong>
+                  </div>
+                  <p className="fg-sheet-item__text">{d.aplicacaoPraticaCidadao}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </PainelRaioX>
 
       <p className="fg-footer-note">
         <ShieldCheck size={16} aria-hidden />
