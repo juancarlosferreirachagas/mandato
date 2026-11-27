@@ -41,10 +41,12 @@ import {
 } from '@/domain/plataforma';
 import { useAsync } from '../hooks/useAsync';
 import { ErrorBox } from '../components/common';
-import { BarrasMensais, BarraHorizontal } from '../components/Graficos';
+import { BarraHorizontal } from '../components/Graficos';
+import { GraficoAreaMensal, GraficoRoscaAreas } from '../components/GraficosModernos';
 import { AreaDetalheModal } from '../components/AreaDetalheModal';
 import { GradeAreas } from '../components/AreasOrcamento';
 import { brl, brlCompacto, dataBr, inteiro, nomeLegivel, nomeOrgaoCurto, mesNome } from '../format';
+import { RESUMO_CONEXOES_OFICIAIS } from '@/database/resumoConexoesOficiais';
 
 type AnoHome = 2026 | 2025 | 'todos';
 
@@ -79,26 +81,32 @@ const ATALHOS = [
   {
     to: '/despesas',
     Icone: Building2,
-    titulo: 'Quem recebe o dinheiro',
-    texto: 'Ranking de empresas e entidades pagas pela Prefeitura e pela Câmara.',
+    titulo: `Todas as ${inteiro(RESUMO_CONEXOES_OFICIAIS.totalCredoresUnicos)} empresas`,
+    texto: 'Ranking 100% paginado com CNPJ, filtros por mês/modalidade e exportação CSV.',
+  },
+  {
+    to: '/despesas?visao=conexoes',
+    Icone: Landmark,
+    titulo: `${inteiro(RESUMO_CONEXOES_OFICIAIS.totalConexoesDom)} conexões no Diário`,
+    texto: `${inteiro(RESUMO_CONEXOES_OFICIAIS.totalEmpresasConectadasDom)} empresas cruzadas direto nos 222 PDFs do Diário Oficial com os pagamentos.`,
   },
   {
     to: '/financas',
     Icone: TrendingUp,
     titulo: 'De onde vem e para onde vai',
-    texto: 'Os impostos que a cidade arrecada e o que foi gasto com eles.',
+    texto: 'Gráficos interativos dos impostos que entram e onde o dinheiro é gasto.',
   },
   {
     to: '/decretos',
     Icone: ArrowRightLeft,
     titulo: 'Diários, leis e decretos',
-    texto: `${QTD_DIARIOS} diários (Executivo + Legislativo), ${QTD_LEIS_SANCIONADAS} leis e ${QTD_DECRETOS} decretos cruzados com os pagamentos.`,
+    texto: `${QTD_DIARIOS} diários (Executivo + Legislativo), ${QTD_LEIS_SANCIONADAS} leis e ${QTD_DECRETOS} decretos auditados.`,
   },
   {
     to: '/politicos',
     Icone: Users,
     titulo: 'Prefeito e vereadores',
-    texto: 'Quem são, quantos votos tiveram, em quais comissões atuam e que projetos apresentaram.',
+    texto: 'Perfis dos 36 eleitos, votos do TSE e projetos/leis sancionadas por autor.',
   },
 ] as const;
 
@@ -366,6 +374,10 @@ export function HomePage() {
                 </Link>
               </div>
 
+              <div className="fg-card" style={{ marginBottom: 14 }}>
+                <GraficoRoscaAreas areas={data.areas} onSelecionarArea={setAreaSelecionada} />
+              </div>
+
               <GradeAreas areas={data.areas} totalBase={totalPago} onSelecionar={setAreaSelecionada} />
             </section>
 
@@ -389,9 +401,9 @@ export function HomePage() {
                     Detalhar →
                   </Link>
                 </div>
-                <BarrasMensais
+                <GraficoAreaMensal
                   pontos={data.meses}
-                  onSelecionar={(m, ex) => nav(`/despesas?ano=${ex ?? (data.ano ?? 2026)}&mes=${m}`)}
+                  onSelecionarMes={(m, ex) => nav(`/despesas?ano=${ex ?? (data.ano ?? 2026)}&mes=${m}`)}
                 />
 
                 <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid #edf2f7' }}>

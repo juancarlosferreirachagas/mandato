@@ -68,6 +68,9 @@ import {
 import { IconeArea } from '../components/AreasOrcamento';
 import { verificarFontesEmTempoReal } from '@/services/auditoriaTempoRealService';
 import { StatusBanco } from '../components/StatusFontes';
+import { PaginacaoModerna } from '../components/PaginacaoModerna';
+import { exportarCsvPlanilha } from '@/services/baseIntegralService';
+import { RESUMO_CONEXOES_OFICIAIS } from '@/database/resumoConexoesOficiais';
 import { useAsync } from '../hooks/useAsync';
 import { brl, brlCompacto, dataBr, dataHoraBr, formatarCnpj, inteiro, mesAbrev, mesNome, nomeLegivel } from '../format';
 import {
@@ -365,7 +368,6 @@ export function DecretosAuditoriaPage() {
   }, [anoCatalogo, modalidadeCatalogo, mesCatalogo, buscaCatalogo, ordemDecretos]);
 
   const LIMIT_CATALOGO = 24;
-  const totalPagsCatalogo = Math.ceil(catalogoFiltradoEOrdenado.length / LIMIT_CATALOGO) || 1;
   const catalogoVisivel = catalogoFiltradoEOrdenado.slice(
     (pagCatalogo - 1) * LIMIT_CATALOGO,
     pagCatalogo * LIMIT_CATALOGO
@@ -505,7 +507,6 @@ export function DecretosAuditoriaPage() {
   }, [escopoAcervo, anoDiario, mesDiario, buscaDiario, ordemDiarios, decretosPorDataIso, leisPorDataIso]);
 
   const LIMIT_DIARIOS = 24;
-  const totalPagsDiarios = Math.ceil(acervoUnificadoFiltrado.length / LIMIT_DIARIOS) || 1;
   const acervoVisivel = acervoUnificadoFiltrado.slice(
     (pagDiario - 1) * LIMIT_DIARIOS,
     pagDiario * LIMIT_DIARIOS
@@ -736,11 +737,11 @@ export function DecretosAuditoriaPage() {
               </div>
             </button>
 
-            <Link to="/despesas?ano=todos" className="fg-puzzle-step">
+            <Link to="/despesas?visao=conexoes" className="fg-puzzle-step">
               <span className="fg-puzzle-step__num">4</span>
               <div>
-                <strong>Pagamentos Reais</strong>
-                <span>TCE-SP (2025 + Jan–Set/2026) na ponta</span>
+                <strong>Empresas & Pagamentos</strong>
+                <span>{inteiro(RESUMO_CONEXOES_OFICIAIS.totalConexoesDom)} conexões CNPJ↔DOM + TCE-SP</span>
               </div>
             </Link>
           </div>
@@ -1608,36 +1609,32 @@ export function DecretosAuditoriaPage() {
             })}
           </div>
 
-          {totalPagsCatalogo > 1 && (
-            <div className="fg-pager" style={{ marginTop: 18, borderRadius: 12, border: '1px solid #e2e8f0' }}>
-              <div>
-                Mostrando <strong>{(pagCatalogo - 1) * LIMIT_CATALOGO + 1}</strong>–
-                <strong>{Math.min(pagCatalogo * LIMIT_CATALOGO, catalogoFiltradoEOrdenado.length)}</strong> de{' '}
-                <strong>{inteiro(catalogoFiltradoEOrdenado.length)}</strong> decretos
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  type="button"
-                  className="fg-btn"
-                  disabled={pagCatalogo <= 1}
-                  onClick={() => setPagCatalogo((p) => Math.max(1, p - 1))}
-                >
-                  ← Anterior
-                </button>
-                <span style={{ alignSelf: 'center', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
-                  {pagCatalogo}/{totalPagsCatalogo}
-                </span>
-                <button
-                  type="button"
-                  className="fg-btn"
-                  disabled={pagCatalogo >= totalPagsCatalogo}
-                  onClick={() => setPagCatalogo((p) => p + 1)}
-                >
-                  Próxima →
-                </button>
-              </div>
-            </div>
-          )}
+          <div className="fg-card" style={{ marginTop: 18, padding: 0, overflow: 'hidden' }}>
+            <PaginacaoModerna
+              pagina={pagCatalogo}
+              totalItens={catalogoFiltradoEOrdenado.length}
+              itensPorPagina={LIMIT_CATALOGO}
+              rotuloItem="decretos orçamentários"
+              onMudarPagina={setPagCatalogo}
+              onExportarCsv={() =>
+                exportarCsvPlanilha(
+                  'fiscaliza-guarulhos-decretos-orcamentarios.csv',
+                  ['Numero', 'Modalidade', 'Data', 'DOM', 'Pagina', 'Valor_BRL', 'Trecho', 'PDF_Oficial'],
+                  catalogoFiltradoEOrdenado.map((d) => [
+                    d.numeroFmt,
+                    d.modalidade ?? 'SUPLEMENTAR',
+                    d.dataBr,
+                    d.codigoDom ? `DOM #${d.codigoDom}` : '',
+                    d.pagina,
+                    d.valor.toFixed(2).replace('.', ','),
+                    d.trecho,
+                    d.pdfUrl,
+                  ])
+                )
+              }
+              rotuloExportar="Baixar CSV"
+            />
+          </div>
         </section>
       )}
 
@@ -2211,36 +2208,15 @@ export function DecretosAuditoriaPage() {
             })}
           </div>
 
-          {totalPagsDiarios > 1 && (
-            <div className="fg-pager" style={{ marginTop: 18, borderRadius: 12, border: '1px solid #e2e8f0' }}>
-              <div>
-                Mostrando <strong>{(pagDiario - 1) * LIMIT_DIARIOS + 1}</strong>–
-                <strong>{Math.min(pagDiario * LIMIT_DIARIOS, acervoUnificadoFiltrado.length)}</strong> de{' '}
-                <strong>{inteiro(acervoUnificadoFiltrado.length)}</strong> registros
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button
-                  type="button"
-                  className="fg-btn"
-                  disabled={pagDiario <= 1}
-                  onClick={() => setPagDiario((p) => Math.max(1, p - 1))}
-                >
-                  ← Anterior
-                </button>
-                <span style={{ alignSelf: 'center', fontWeight: 700, fontFamily: 'var(--font-mono)' }}>
-                  {pagDiario}/{totalPagsDiarios}
-                </span>
-                <button
-                  type="button"
-                  className="fg-btn"
-                  disabled={pagDiario >= totalPagsDiarios}
-                  onClick={() => setPagDiario((p) => p + 1)}
-                >
-                  Próxima →
-                </button>
-              </div>
-            </div>
-          )}
+          <div className="fg-card" style={{ marginTop: 18, padding: 0, overflow: 'hidden' }}>
+            <PaginacaoModerna
+              pagina={pagDiario}
+              totalItens={acervoUnificadoFiltrado.length}
+              itensPorPagina={LIMIT_DIARIOS}
+              rotuloItem="publicações oficiais"
+              onMudarPagina={setPagDiario}
+            />
+          </div>
         </section>
       )}
 

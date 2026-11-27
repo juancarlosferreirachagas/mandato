@@ -13,6 +13,14 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
+            if (
+              id.includes('recharts') ||
+              id.includes('d3-') ||
+              id.includes('framer-motion') ||
+              id.includes('@tanstack')
+            ) {
+              return 'ui-modern';
+            }
             return 'vendor';
           }
           if (id.includes('contingenciaOficialGuarulhos')) {

@@ -5,7 +5,7 @@
  * ============================================================================
  */
 
-import { useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import {
   ArrowRightLeft,
@@ -21,9 +21,11 @@ import { PLATAFORMA, QTD_DECRETOS } from '@/domain/plataforma';
 import { useAsync } from '../hooks/useAsync';
 import { ErrorBox } from '../components/common';
 import { BarraHorizontal } from '../components/Graficos';
+import { GraficoReceitaDespesaModerno, GraficoRoscaAreas } from '../components/GraficosModernos';
 import { AreaDetalheModal } from '../components/AreaDetalheModal';
 import { GradeAreas } from '../components/AreasOrcamento';
-import { brl, brlCompacto, inteiro, mesAbrev, mesNome, nomeLegivel, nomeOrgaoCurto } from '../format';
+import { brl, brlCompacto, inteiro, mesNome, nomeLegivel, nomeOrgaoCurto } from '../format';
+import { RESUMO_CONEXOES_OFICIAIS } from '@/database/resumoConexoesOficiais';
 
 type Aba = 'geral' | 'receitas' | 'despesas';
 const ABAS: { id: Aba; rotulo: string }[] = [
@@ -64,69 +66,6 @@ interface PontoComparativo {
   exercicio: number;
   mes: number;
   v: number;
-}
-
-function Comparativo({
-  rec,
-  desp,
-  mesSel,
-  anoSel,
-  onSelecionar,
-}: {
-  rec: PontoComparativo[];
-  desp: PontoComparativo[];
-  mesSel: number | null;
-  anoSel: number | null;
-  onSelecionar: (mes: number, exercicio: number) => void;
-}) {
-  const chaves = useMemo(() => {
-    const mapa = new Map<string, { exercicio: number; mes: number }>();
-    for (const r of rec) mapa.set(`${r.exercicio}-${r.mes}`, { exercicio: r.exercicio, mes: r.mes });
-    for (const d of desp) mapa.set(`${d.exercicio}-${d.mes}`, { exercicio: d.exercicio, mes: d.mes });
-    return [...mapa.values()].sort((a, b) => a.exercicio - b.exercicio || a.mes - b.mes);
-  }, [rec, desp]);
-
-  const max = Math.max(...rec.map((r) => r.v), ...desp.map((d) => d.v), 1);
-  const multiAno = anoSel === null || new Set(chaves.map((c) => c.exercicio)).size > 1;
-  const get = (arr: PontoComparativo[], ex: number, m: number) =>
-    arr.find((x) => x.exercicio === ex && x.mes === m)?.v ?? 0;
-
-  const barras = (
-    <div
-      className={`fin-comp${multiAno ? ' fin-comp--multi' : ''}`}
-      style={multiAno ? ({ '--cols': chaves.length } as CSSProperties) : undefined}
-      role="img"
-      aria-label="Comparativo mensal entre dinheiro que entrou e dinheiro gasto"
-    >
-      {chaves.map(({ exercicio, mes }) => {
-        const vr = get(rec, exercicio, mes);
-        const vd = get(desp, exercicio, mes);
-        const ativo = !multiAno && mesSel === mes;
-        const rotulo = multiAno ? `${mesAbrev(mes)}/${String(exercicio).slice(2)}` : mesAbrev(mes);
-        return (
-          <button
-            key={`${exercicio}-${mes}`}
-            type="button"
-            className={`fin-comp__col${ativo ? ' is-sel' : ''}`}
-            onClick={() => onSelecionar(mes, exercicio)}
-            aria-pressed={ativo}
-            title={`${mesNome(mes)}/${exercicio}: entrou ${brl(vr)} · saiu ${brl(vd)}`}
-          >
-            <span className="fin-comp__bars">
-              <i className="fin-comp__b fin-comp__b--rec" style={{ height: `${Math.max((vr / max) * 100, 2)}%` }} />
-              <i
-                className="fin-comp__b fin-comp__b--desp"
-                style={{ height: `${Math.max((Math.max(vd, 0) / max) * 100, 2)}%` }}
-              />
-            </span>
-            <span className="fin-comp__lbl">{rotulo}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-
-  return multiAno ? <div className="fin-comp-scroll">{barras}</div> : barras;
 }
 
 function explicarGrupoReceita(nome: string): string {
@@ -427,23 +366,11 @@ export function FinancasPage() {
                     <TrendingUp size={18} color="#059669" aria-hidden />
                     <span>Quanto entrou e quanto saiu por mês</span>
                   </h2>
-                  <p className="fg-sub">Toque em um mês para filtrar os dados daquele período.</p>
-                  <div className="fin-legend">
-                    <span>
-                      <i className="fin-dot fin-dot--rec" />
-                      Entrou (arrecadado)
-                    </span>
-                    <span>
-                      <i className="fin-dot fin-dot--desp" />
-                      Saiu (pago)
-                    </span>
-                  </div>
-                  <Comparativo
+                  <p className="fg-sub">Passe o mouse ou toque em um mês para ver o saldo exato e filtrar o período.</p>
+                  <GraficoReceitaDespesaModerno
                     rec={recMeses}
                     desp={despMeses}
-                    mesSel={mes}
-                    anoSel={ano}
-                    onSelecionar={aoClicarMesComparativo}
+                    onSelecionarMes={aoClicarMesComparativo}
                   />
                 </div>
 
@@ -534,7 +461,39 @@ export function FinancasPage() {
 
           {aba === 'despesas' && (
             <section className="fin-sec">
+              <div className="fg-card">
+                <h2 className="fg-h2">Divisão proporcional por área da cidade ({periodo})</h2>
+                <p className="fg-sub">Toque em qualquer fatia ou linha da legenda para abrir os maiores recebedores.</p>
+                <GraficoRoscaAreas areas={data.areas} onSelecionarArea={setAreaSelecionada} />
+              </div>
+
               <GradeAreas areas={data.areas} totalBase={desp} onSelecionar={setAreaSelecionada} />
+
+              <div className="fg-card">
+                <div className="fg-section__head" style={{ marginBottom: 8 }}>
+                  <div>
+                    <h2 className="fg-h2">Como a Prefeitura contrata em 2026 (Modalidades de Licitação)</h2>
+                    <p className="fg-sub">
+                      Toque em uma modalidade para abrir a lista completa e paginada de empresas contratadas por aquele meio.
+                    </p>
+                  </div>
+                  <Link to="/despesas?ano=2026" className="fg-link">
+                    Filtrar empresas →
+                  </Link>
+                </div>
+                <div style={{ display: 'grid', gap: 2 }}>
+                  {RESUMO_CONEXOES_OFICIAIS.modalidadesLicitacao2026.map((m) => (
+                    <BarraHorizontal
+                      key={m.modalidade}
+                      nome={m.modalidade}
+                      valor={m.total}
+                      max={RESUMO_CONEXOES_OFICIAIS.modalidadesLicitacao2026[0]?.total || 1}
+                      meta={`${inteiro(m.qtdEmpresas)} empresas · ${inteiro(m.qtdPagamentos)} pagamentos`}
+                      to={`/despesas?ano=2026&modalidade=${encodeURIComponent(m.modalidade)}`}
+                    />
+                  ))}
+                </div>
+              </div>
 
               <div className="fg-grid-2">
                 <div className="fg-card">

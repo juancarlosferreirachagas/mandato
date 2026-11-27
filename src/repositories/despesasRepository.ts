@@ -5,10 +5,15 @@
  * ============================================================================
  */
 
-import { db } from '@/database/client';
+import { db, isRemoteDbEnabled } from '@/database/client';
 import { SNAPSHOT_TCE_GUARULHOS_2026 } from '@/database/contingenciaOficialGuarulhos';
 import { SNAPSHOT_TCE_GUARULHOS_2025 } from '@/database/contingenciaOficialGuarulhos2025';
 import { LINKS_OFICIAIS } from '@/domain/plataforma';
+import {
+  carregarCredoresCompletos,
+  carregarPagamentosDoCredor,
+  obterCredorIntegralPorChave,
+} from '@/services/baseIntegralService';
 
 export interface FiltroDespesas {
   ano?: number | null;
@@ -69,12 +74,21 @@ export interface CredorRanking {
   ultimo_pagamento: string | null;
   repasse_interno: boolean;
   total_linhas: number;
+  area?: string | null;
+  modalidade_principal?: string | null;
+  qtd_conexoes_dom?: number;
+  ultimo_dom_url?: string | null;
 }
 
 export interface FiltroRanking extends FiltroDespesas {
   busca?: string;
   tipo?: 'PJ' | 'PF' | 'OUTRO' | null;
+  area?: string | null;
+  modalidade?: string | null;
   somenteExternos?: boolean;
+  somenteComDom?: boolean;
+  ordenarPor?: 'valor' | 'pagamentos' | 'dom' | 'recente' | 'nome';
+  direcao?: 'desc' | 'asc';
   limite?: number;
   deslocamento?: number;
 }
@@ -274,6 +288,7 @@ function encontrarCredorNosSnapshots(chave: string) {
 }
 
 async function rpcSafe<T>(nome: string, args: Record<string, unknown>): Promise<T | null> {
+  if (!isRemoteDbEnabled) return null;
   try {
     const { data, error } = await db().rpc(nome, args);
     if (error || !data) return null;
@@ -430,6 +445,116 @@ export const despesasRepository = {
       }));
     }
 
+    // Usa a base integral de TODOS os ~6.741 credores (com séries mensais reais e conexões DOM)
+    try {
+      const todos = await carregarCredoresCompletos();
+      const termoNorm = normalizarTexto(f.busca).trim();
+      const termoDig = termoNorm.replace(/\D/g, '');
+      const mesIdx = f.mes && f.mes >= 1 ? f.mes - 1 : null;
+
+      const calculados: CredorRanking[] = [];
+      for (const c of todos) {
+        if (f.somenteExternos && c.repasseInterno) continue;
+        if (f.somenteComDom && c.qtdConexoesDom <= 0) continue;
+        if (f.tipo && c.tipo !== f.tipo) continue;
+        if (f.area && c.area !== f.area) continue;
+        if (f.modalidade && c.modalidadePrincipal !== f.modalidade) continue;
+
+        let valor = 0;
+        let qtd = 0;
+
+        if (f.orgao) {
+          const og = c.orgaos.find((o) => o.orgao === f.orgao);
+          if (!og) continue;
+          if (f.ano === 2025) {
+            valor = og.val25;
+            qtd = og.qtd25;
+          } else if (f.ano === 2026) {
+            valor = og.val26;
+            qtd = og.qtd26;
+          } else {
+            valor = Math.round((og.val25 + og.val26) * 100) / 100;
+            qtd = og.qtd25 + og.qtd26;
+          }
+          if (mesIdx !== null && f.ano === 2025) {
+            const vm = c.meses2025[mesIdx] ?? 0;
+            if (vm <= 0) continue;
+            valor = Math.min(valor, vm);
+          } else if (mesIdx !== null && f.ano === 2026) {
+            const vm = c.meses2026[mesIdx] ?? 0;
+            if (vm <= 0) continue;
+            valor = Math.min(valor, vm);
+          }
+        } else if (f.ano === 2025) {
+          if (mesIdx !== null) {
+            valor = c.meses2025[mesIdx] ?? 0;
+            qtd = valor > 0 ? Math.max(1, Math.round(c.qtd2025 / Math.max(1, c.meses2025.filter((x) => x > 0).length))) : 0;
+          } else {
+            valor = c.total2025;
+            qtd = c.qtd2025;
+          }
+        } else if (f.ano === 2026) {
+          if (mesIdx !== null) {
+            valor = c.meses2026[mesIdx] ?? 0;
+            qtd = valor > 0 ? Math.max(1, Math.round(c.qtd2026 / Math.max(1, c.meses2026.filter((x) => x > 0).length))) : 0;
+          } else {
+            valor = c.total2026;
+            qtd = c.qtd2026;
+          }
+        } else {
+          valor = c.totalConsolidado;
+          qtd = c.qtdConsolidado;
+        }
+
+        if (valor <= 0 && qtd <= 0) continue;
+
+        if (termoNorm) {
+          const bateNome = normalizarTexto(c.credor).includes(termoNorm);
+          const bateCnpj = termoDig.length > 0 && String(c.cnpj ?? '').includes(termoDig);
+          const bateArea = normalizarTexto(c.area).includes(termoNorm);
+          const bateMod = normalizarTexto(c.modalidadePrincipal).includes(termoNorm);
+          const bateContrato = c.contratosRef.some((cr) => normalizarTexto(cr).includes(termoNorm));
+          if (!bateNome && !bateCnpj && !bateArea && !bateMod && !bateContrato) continue;
+        }
+
+        calculados.push({
+          chave: c.chave,
+          credor: c.credor,
+          cnpj_credor: c.cnpj,
+          tipo_credor: c.tipo,
+          total_liquido: Math.round(valor * 100) / 100,
+          qtd,
+          ultimo_pagamento: c.ultimoPagamento,
+          repasse_interno: c.repasseInterno,
+          total_linhas: 0,
+          area: c.area,
+          modalidade_principal: c.modalidadePrincipal,
+          qtd_conexoes_dom: c.qtdConexoesDom,
+          ultimo_dom_url: c.ultimoDomUrl,
+        });
+      }
+
+      const dir = f.direcao === 'asc' ? 1 : -1;
+      const ord = f.ordenarPor ?? 'valor';
+      calculados.sort((a, b) => {
+        if (ord === 'pagamentos') return dir * (a.qtd - b.qtd) || b.total_liquido - a.total_liquido;
+        if (ord === 'dom') return dir * ((a.qtd_conexoes_dom ?? 0) - (b.qtd_conexoes_dom ?? 0)) || b.total_liquido - a.total_liquido;
+        if (ord === 'recente') return dir * String(a.ultimo_pagamento ?? '').localeCompare(String(b.ultimo_pagamento ?? '')) || b.total_liquido - a.total_liquido;
+        if (ord === 'nome') return dir * a.credor.localeCompare(b.credor, 'pt-BR');
+        return dir * (a.total_liquido - b.total_liquido);
+      });
+
+      const totalLinhas = calculados.length;
+      const offset = f.deslocamento ?? 0;
+      const limit = f.limite ?? 30;
+      return calculados.slice(offset, offset + limit).map((item) => ({
+        ...item,
+        total_linhas: totalLinhas,
+      }));
+    } catch {
+      // Fallback imediato para snapshots embutidos
+    }
+
     const snap = selecionarSnapshotDespesas(f.ano);
     const termoNorm = normalizarTexto(f.busca).trim();
     const termoDig = termoNorm.replace(/\D/g, '');
@@ -481,6 +606,26 @@ export const despesasRepository = {
       };
     }
 
+    try {
+      const integral = await obterCredorIntegralPorChave(chave);
+      if (integral) {
+        return {
+          chave: integral.chave,
+          credor: integral.credor,
+          cnpj_credor: integral.cnpj,
+          tipo_credor: integral.tipo,
+          total_liquido: integral.totalConsolidado,
+          qtd: integral.qtdConsolidado,
+          primeiro_pagamento: integral.primeiroPagamento,
+          ultimo_pagamento: integral.ultimoPagamento,
+          maior_pagamento: integral.maiorPagamento,
+          nomes: [integral.credor],
+        };
+      }
+    } catch {
+      // fallback snapshot
+    }
+
     const { consolidado } = encontrarCredorNosSnapshots(chave);
     if (!consolidado) return null;
     return {
@@ -501,6 +646,26 @@ export const despesasRepository = {
     const rows = await rpcSafe<PontoMensal[]>('fg_credor_por_mes', { p_chave: chave });
     if (rows && rows.length > 0) {
       return rows.map((r) => ({ ...r, total_liquido: num(r.total_liquido), qtd: num(r.qtd) }));
+    }
+
+    try {
+      const integral = await obterCredorIntegralPorChave(chave);
+      if (integral) {
+        const pontos: PontoMensal[] = [];
+        if (integral.total2025 > 0) {
+          integral.meses2025.forEach((v, idx) => {
+            pontos.push({ exercicio: 2025, mes: idx + 1, total_liquido: v, qtd: v > 0 ? 1 : 0 });
+          });
+        }
+        if (integral.total2026 > 0) {
+          integral.meses2026.forEach((v, idx) => {
+            pontos.push({ exercicio: 2026, mes: idx + 1, total_liquido: v, qtd: v > 0 ? 1 : 0 });
+          });
+        }
+        if (pontos.length > 0) return pontos;
+      }
+    } catch {
+      // fallback snapshot
     }
 
     const { c25, c26 } = encontrarCredorNosSnapshots(chave);
@@ -538,6 +703,21 @@ export const despesasRepository = {
       return rows.map((r) => ({ ...r, total_liquido: num(r.total_liquido), qtd: num(r.qtd) }));
     }
 
+    try {
+      const integral = await obterCredorIntegralPorChave(chave);
+      if (integral && integral.orgaos.length > 0) {
+        return integral.orgaos
+          .map((o) => ({
+            orgao: o.orgao,
+            total_liquido: Math.round((o.val25 + o.val26) * 100) / 100,
+            qtd: o.qtd25 + o.qtd26,
+          }))
+          .sort((a, b) => b.total_liquido - a.total_liquido);
+      }
+    } catch {
+      // fallback snapshot
+    }
+
     const { consolidado } = encontrarCredorNosSnapshots(chave);
     if (!consolidado) return [];
     if (consolidado.orgaosMap) {
@@ -559,6 +739,24 @@ export const despesasRepository = {
         total_linhas: num(r.total_linhas),
         fonte_url: corrigirFonteUrl(r.fonte_url),
       }));
+    }
+
+    try {
+      const pags = await carregarPagamentosDoCredor(chave);
+      if (pags.length > 0) {
+        return pags.slice(deslocamento, deslocamento + limite).map((p) => ({
+          id: p.id,
+          data_pagamento: p.data_pagamento,
+          orgao: p.orgao,
+          valor_pago: p.valor_pago,
+          nr_empenho: p.nr_empenho,
+          descricao: p.descricao,
+          fonte_url: p.fonte_url,
+          total_linhas: pags.length,
+        }));
+      }
+    } catch {
+      // fallback snapshot
     }
 
     const { consolidado } = encontrarCredorNosSnapshots(chave);

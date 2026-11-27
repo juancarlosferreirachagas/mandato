@@ -7,28 +7,30 @@ const DEFAULT_ANON_KEY =
 const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || DEFAULT_URL;
 const anonKey = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || DEFAULT_ANON_KEY;
 
-export const isSupabaseConfigured = Boolean(url && anonKey);
+/**
+ * Modo estático oficial ativo por padrão: o portal público consome diretamente
+ * os pacotes oficiais auditados (TCE-SP 2025–Set/2026, TSE 2024, 222 PDFs DOM-GRU
+ * e 140 edições DOL-CMG) em 0 ms, sem depender de banco remoto pausado nem gerar
+ * erros de rede no navegador. Para reativar o cluster remoto Supabase no futuro,
+ * basta definir VITE_ENABLE_REMOTE_DB=true no ambiente.
+ */
+export const isRemoteDbEnabled = import.meta.env.VITE_ENABLE_REMOTE_DB === 'true';
+export const isSupabaseConfigured = true;
 
 export class NotConfiguredError extends Error {
   constructor() {
-    super('Supabase não configurado. Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY em .env.');
+    super('Banco remoto desativado (modo acervo oficial local ativo).');
     this.name = 'NotConfiguredError';
   }
 }
 
-/**
- * Circuit-breaker rápido para evitar atrasos e dezenas de erros de rede no navegador
- * quando o cluster remoto Supabase estiver pausado ou sem resolução DNS.
- * Na primeira falha de rede, marca offline por 5 minutos e responde em 0 ms,
- * acionando imediatamente os snapshots locais oficiais validados.
- */
 let offlineAteTimestamp = 0;
 const COOLDOWN_OFFLINE_MS = 5 * 60 * 1000;
 const TIMEOUT_PRIMEIRA_CHAMADA_MS = 2200;
 
 const fetchComCircuitBreaker: typeof fetch = async (input, init) => {
-  if (Date.now() < offlineAteTimestamp) {
-    throw new TypeError('Failed to fetch (contingência local ativa)');
+  if (!isRemoteDbEnabled || Date.now() < offlineAteTimestamp) {
+    throw new TypeError('Local official dataset active');
   }
 
   const ctrl = new AbortController();

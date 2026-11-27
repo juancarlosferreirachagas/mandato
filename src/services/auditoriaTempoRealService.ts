@@ -19,6 +19,7 @@ import {
   RESUMO_VALIDACAO_ACERVO,
 } from '@/domain/diariosCatalogoReal';
 import { LINKS_OFICIAIS, PLATAFORMA } from '@/domain/plataforma';
+import { RESUMO_CONEXOES_OFICIAIS } from '@/database/resumoConexoesOficiais';
 import { brlCompacto } from '@/ui/format';
 
 export type StatusValidacaoFonte = 'ONLINE_VALIDADO' | 'SINCRONIZANDO' | 'CONTINGENCIA_LOCAL';
@@ -90,16 +91,17 @@ export async function verificarFontesEmTempoReal(_ano = 2026): Promise<Relatorio
     {
       id: 'dom-gru-diario-oficial-executivo',
       sigla: `DOM-GRU · ${ACERVO_DIARIOS_EXECUTIVO.length} edições (${execInfo.qtdValidadosSha256} PDFs SHA-256)`,
-      nomeOficial: 'Diário Oficial do Executivo de Guarulhos — PDFs, Decretos, Leis e Contratos',
-      escopoAuditado: `${ACERVO_DIARIOS_EXECUTIVO.length} edições (${execInfo.totalPaginas.toLocaleString('pt-BR')} págs · ${(execInfo.tamanhoTotalMb / 1024).toFixed(2).replace('.', ',')} GB) · ${CATALOGO_DECRETOS_SUPLEMENTARES_REAIS.length} decretos (${brlCompacto(totalDecretosValor)}) · ${LEIS_MUNICIPAIS_SANCIONADAS_REAIS.length} leis · ${EXTRATOS_CONTRATOS_DOM_REAIS.length} extratos contratuais`,
+      nomeOficial: 'Diário Oficial do Executivo de Guarulhos — PDFs, Decretos, Leis e Conexões',
+      escopoAuditado: `${ACERVO_DIARIOS_EXECUTIVO.length} edições (${execInfo.totalPaginas.toLocaleString('pt-BR')} págs · ${(execInfo.tamanhoTotalMb / 1024).toFixed(2).replace('.', ',')} GB) · ${CATALOGO_DECRETOS_SUPLEMENTARES_REAIS.length} decretos (${brlCompacto(totalDecretosValor)}) · ${LEIS_MUNICIPAIS_SANCIONADAS_REAIS.length} leis · ${RESUMO_CONEXOES_OFICIAIS.totalConexoesDom.toLocaleString('pt-BR')} conexões CNPJ↔DOM`,
       descricaoTecnica:
-        '100% dos arquivos PDF de 2025 e 2026 baixados e verificados com hash criptográfico SHA-256, incluindo leitura integral de créditos suplementares, remanejamentos, leis sancionadas e extratos de contratos.',
+        '100% dos arquivos PDF de 2025 e 2026 baixados e verificados com hash criptográfico SHA-256, com leitura integral de créditos suplementares, remanejamentos, leis sancionadas e cruzamento exato de CNPJs contratados.',
       status: 'ONLINE_VALIDADO',
       latenciaMs: Math.max(2, Math.round(latenciaBase * 0.6)),
       registrosConfirmados:
         ACERVO_DIARIOS_EXECUTIVO.length +
         CATALOGO_DECRETOS_SUPLEMENTARES_REAIS.length +
         LEIS_MUNICIPAIS_SANCIONADAS_REAIS.length +
+        RESUMO_CONEXOES_OFICIAIS.totalConexoesDom +
         EXTRATOS_CONTRATOS_DOM_REAIS.length,
       ultimaVerificacaoIso: agoraIso,
       ultimaDataBase: execInfo.ultimaData,

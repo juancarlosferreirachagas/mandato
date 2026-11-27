@@ -13,6 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
+import { MotionConfig } from 'framer-motion';
 import {
   Activity,
   ArrowRightLeft,
@@ -35,7 +36,7 @@ import {
   type IconeSecaoId,
 } from '../navigation';
 import { StatusBanco } from '../components/StatusFontes';
-import { isSupabaseConfigured } from '@/database/client';
+import { BuscaGlobalModal } from '../components/BuscaGlobalModal';
 import {
   LINKS_OFICIAIS,
   PLATAFORMA,
@@ -92,11 +93,24 @@ function Marca({ onClick }: { onClick?: () => void }) {
 
 export function PublicLayout() {
   const [menuAberto, setMenuAberto] = useState(false);
+  const [buscaAberta, setBuscaAberta] = useState(false);
   const { pathname } = useLocation();
   const botaoMenuRef = useRef<HTMLButtonElement>(null);
   const botaoFecharRef = useRef<HTMLButtonElement>(null);
 
   const fecharMenu = () => setMenuAberto(false);
+
+  // Atalho global Ctrl+K / Cmd+K para busca instantânea em todo o portal
+  useEffect(() => {
+    const aoTeclar = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setBuscaAberta((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', aoTeclar);
+    return () => window.removeEventListener('keydown', aoTeclar);
+  }, []);
 
   // Fecha a gaveta ao navegar
   useEffect(() => {
@@ -131,6 +145,7 @@ export function PublicLayout() {
   const secoesBarra = SECOES.filter((s) => SECOES_BARRA_INFERIOR.includes(s.iconeId));
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="shell">
       <RolarParaOTopo />
       <a href="#conteudo" className="fg-skip">
@@ -181,9 +196,16 @@ export function PublicLayout() {
           </nav>
 
           <div className="topbar__actions">
-            <Link to="/despesas" className="topbar__icon-btn" aria-label="Buscar empresa ou fornecedor">
-              <Search size={19} aria-hidden />
-            </Link>
+            <button
+              type="button"
+              className="topbar__search-trigger"
+              onClick={() => setBuscaAberta(true)}
+              aria-label="Abrir busca rápida (Ctrl+K)"
+            >
+              <Search size={16} aria-hidden />
+              <span className="topbar__search-label">Buscar…</span>
+              <kbd className="topbar__search-kbd">Ctrl K</kbd>
+            </button>
             <button
               ref={botaoMenuRef}
               type="button"
@@ -239,15 +261,11 @@ export function PublicLayout() {
         </aside>
       </div>
 
-      {!isSupabaseConfigured && (
-        <div className="banner" role="status">
-          Banco de dados não configurado — preencha as chaves no <code>.env</code>.
-        </div>
-      )}
-
       <main id="conteudo" className="container main">
         <Outlet />
       </main>
+
+      <BuscaGlobalModal aberto={buscaAberta} onFechar={() => setBuscaAberta(false)} />
 
       {/* Barra inferior (somente celular) */}
       <nav className="fg-tabbar" aria-label="Acesso rápido">
@@ -342,5 +360,6 @@ export function PublicLayout() {
         </div>
       </footer>
     </div>
+    </MotionConfig>
   );
 }
